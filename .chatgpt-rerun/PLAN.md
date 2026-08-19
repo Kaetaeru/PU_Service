@@ -2,71 +2,115 @@
 
 ## Project goal
 
-Build `PU_Service` as the service layer for connecting accommodation operations with a pickup/transport service. The repository is new and contains no product implementation. Integration contracts must be established before architecture or implementation assumptions are made.
+Build `PU_Service` as the server-side service layer behind the Stay Pachira airport transfer request interface, then connect accepted requests to the eventual transport/driver provider through an isolated adapter boundary.
 
 ## Task graph
 
 ### TASK-001 — Define pickup-service integration contract
 
-**Status:** active, waiting for user decisions (`needs_user` checkpoint)
+**Status:** complete
 
 **Goal**
 
-Turn the current product intent into an implementation-ready contract for the accommodation pickup workflow.
+Turn the product intent into an implementation-ready contract for the accommodation transfer intake workflow without inventing an external provider API.
 
-**Evidence-backed work completed**
+**Evidence incorporated**
 
-A provider-neutral discovery contract is recorded at `docs/pickup-integration-contract.md`. It documents:
+The user supplied `TalkFile_pickup.html`, which resolved the accommodation-side intake ambiguity. The page is a guest-facing airport/station transfer form with manual submit, direction-specific schedule semantics, stable port/stay codes, local fare calculation, and browser share/copy output. It has no backend request or persistence.
 
-- minimum logical service boundary;
-- lifecycle semantics from intent receipt through validation, dispatch, provider acknowledgement, active service, completion, cancellation, and failure;
-- provider-neutral entities/identifiers;
-- idempotency and duplicate-protection requirements;
-- retry/error classification;
-- authentication/secret boundaries;
-- observability and reconciliation requirements;
-- architecture-affecting unresolved decisions.
+Technical planning artifacts were created:
 
-**Unresolved dependencies**
+- `기술적기획/README.md`
+- `기술적기획/01_HTML_분석.md`
+- `기술적기획/02_PU_Service_연결_설계.md`
+- `기술적기획/03_API_계약_초안.md`
 
-The following must be confirmed before TASK-001 can be completed safely:
-
-1. accommodation-side source system/repository/API and delivery mechanism;
-2. exact pickup/transport use case and external provider/API, if any;
-3. automatic versus manual/on-demand creation trigger;
-4. scheduling/timezone/change semantics;
-5. cancellation/modification ownership and allowed states;
-6. accommodation-visible statuses and provider status delivery/query mechanism;
-7. authentication/verification methods on both integration boundaries;
-8. `PU_Service` ownership of persistence, API exposure, background processing, deployment, and gateway concerns;
-9. retention/privacy requirements for guest/contact/location data.
+The consolidated contract at `docs/pickup-integration-contract.md` was updated with this evidence.
 
 **Acceptance criteria**
 
-- The pickup request lifecycle is explicitly documented from accommodation booking/context through dispatch, status updates, completion, cancellation, and failure handling. **Partially satisfied:** provider-neutral semantics are documented; final transitions/status mapping depend on provider/business policy.
-- Required domain entities and identifiers are listed without inventing provider-specific fields. **Satisfied at discovery level.**
-- External integration boundaries and authentication requirements are identified or explicitly marked as unresolved user decisions. **Satisfied.**
-- Error handling, idempotency, retry, observability, and data-retention expectations are captured at a level sufficient to choose an implementation architecture. **Partially satisfied:** all categories are documented, but retention and provider-specific retry/auth behavior remain unresolved.
-- A concrete next implementation task can be selected without guessing missing provider or accommodation interfaces. **Not yet satisfied.**
+- Pickup request lifecycle documented from intake through future provider dispatch/completion/cancellation/failure. **Satisfied at normalized/provider-neutral level.**
+- Required domain entities and identifiers listed without inventing provider fields. **Satisfied.**
+- External integration and authentication boundaries identified or explicitly deferred. **Satisfied.**
+- Error handling, idempotency, server-side fare authority, retry/reconciliation and sensitive-data considerations captured sufficiently to choose the first architecture boundary. **Satisfied.**
+- Concrete next implementation task selectable without guessing the accommodation interface or provider API. **Satisfied:** first implementation can build the HTML intake API/domain/persistence boundary while provider dispatch remains behind an adapter.
 
 **Validation**
 
-- Mandatory Rerun read order was completed for this dispatch.
-- Repository root was rechecked and contains only `.chatgpt-rerun` plus the TASK-001 discovery document added during this run; no product implementation exists.
-- Every TASK-001 acceptance criterion was reviewed against repository/user evidence.
-- Missing external contracts were not invented; they are explicitly enumerated for user resolution.
+- Rerun documents were re-read in mandatory order before work.
+- Repository state was checked before adding planning artifacts.
+- Uploaded HTML was inspected directly and its form controls, client fare data, submit handler and share/copy behavior were analyzed.
+- No server call/provider API was inferred where none exists.
+- Browser fare and validation were explicitly treated as non-authoritative.
+- External provider-specific behavior remains deferred rather than invented.
 
-## Planned follow-up tasks
+### TASK-002 — Select implementation architecture and finalize intake domain/API
 
-These remain provisional until TASK-001 is finalized:
+**Status:** ready, not started
 
-- TASK-002 — Define service architecture and API/domain model.
-- TASK-003 — Implement the agreed integration skeleton and configuration boundaries.
-- TASK-004 — Add contract/unit/integration validation for pickup lifecycle behavior.
+**Goal**
+
+Turn the technical planning contract into an implementation blueprint for the first `PU_Service` executable slice.
+
+**Starting scope**
+
+- choose runtime/framework;
+- choose persistence technology and migration strategy;
+- define source tree/module boundaries;
+- finalize `POST /v1/transfer-requests` and `GET /v1/transfer-requests/{id}`;
+- finalize domain/value objects and fare policy ownership;
+- define idempotency persistence strategy;
+- decide same-origin versus CORS deployment boundary based on actual hosting coordinates;
+- define tests for the extracted HTML fare/validation rules;
+- keep transport-provider adapter as an interface until provider details exist.
+
+**Dependencies / decisions still needed during TASK-002**
+
+- actual HTML production origin/domain;
+- desired/available runtime or hosting constraints for `PU_Service`;
+- persistence/deployment preference if one already exists;
+- `WSR` production address before real dispatch;
+- provider/driver process is not required for intake implementation but is required before dispatch implementation.
+
+**Acceptance criteria**
+
+- technology choices are explicit and justified;
+- API/domain/storage contracts are implementation-ready;
+- fare rules have an authoritative server representation and test vectors;
+- HTML integration path and deployment/CORS boundary are explicit;
+- provider adapter interface is defined without provider-specific fabrication;
+- TASK-003 can implement a minimal end-to-end intake path.
+
+### TASK-003 — Implement HTML intake service slice
+
+**Status:** blocked on TASK-002
+
+Provisional scope:
+
+- service skeleton/config;
+- transfer request domain;
+- fare calculation;
+- persistence;
+- idempotent create API;
+- request read API;
+- validation/errors;
+- automated tests.
+
+### TASK-004 — Wire HTML and add operational/provider integration
+
+**Status:** blocked on TASK-003 and provider/operations decisions
+
+Provisional scope:
+
+- replace local-only submit with API call;
+- server-response ticket/driver message;
+- loading/retry/idempotency UX;
+- provider/operator adapter and lifecycle integration when available.
 
 ## Constraints
 
-- Do not invent accommodation-system or pickup-provider APIs.
-- Do not start TASK-002 while architecture-affecting TASK-001 dependencies remain unresolved.
-- Preserve Rerun run identity, sequence, task, and validation history across reconciliation.
-- Use `PLAN.md -> STATE.md -> control.json` for authoritative state transitions; `STATUS.md` remains a human-facing projection.
+- Do not embed long-lived secrets in guest HTML.
+- Client-side fare is estimate only; server fare is authoritative.
+- Do not invent transport-provider endpoints/status/auth.
+- Preserve Rerun run identity and validation history.
+- Use `PLAN.md -> STATE.md -> control.json` for authoritative state transitions; `STATUS.md` is projection only.
