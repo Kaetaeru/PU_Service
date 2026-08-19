@@ -5,10 +5,12 @@ Human-facing projection only. Do not use this file as reconciliation source of t
 - Connection: active
 - Run: `rerun-7f3c6d7a-9a31-4a9d-b54c-4b7fbb1a4d2e`
 - Sequence: `0`
-- Status: `needs_user`
+- Status: `complete`
 - Current task: `TASK-001 — Define pickup-service integration contract`
 - Implementation started: no
 - Discovery artifact: `docs/pickup-integration-contract.md`
-- Last meaningful checkpoint: provider-neutral integration responsibilities, lifecycle semantics, identifiers, idempotency/retry/error handling, auth boundaries, and observability were documented. TASK-001 is waiting on the accommodation-side source contract and the exact pickup/transport use case/provider/API plus related scheduling, cancellation, status, auth, ownership, and retention decisions.
+- Technical planning: `기술적기획/`
+- Last meaningful checkpoint: the supplied Stay Pachira transfer HTML was analyzed as the actual accommodation-side input interface. Its local form, fare rules, submit flow and browser share behavior were mapped to a concrete HTML -> `PU_Service` intake API boundary. Server-authoritative validation/fare, persistence, request identity and idempotency are planned; external provider behavior remains behind a future adapter.
+- Next task: `TASK-002 — Select implementation architecture and finalize intake domain/API`
 
-When the missing decisions are supplied and control returns to `continue`, resume TASK-001 on the same sequence; do not skip directly to implementation.
+TASK-001 is complete. A future `continue` should begin TASK-002 after the mandatory Rerun read/reconciliation cycle; do not start implementation before TASK-002 is recorded and validated.
