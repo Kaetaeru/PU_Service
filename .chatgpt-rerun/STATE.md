@@ -3,52 +3,66 @@
 - run_id: `rerun-7f3c6d7a-9a31-4a9d-b54c-4b7fbb1a4d2e`
 - sequence: `0`
 - task_id: `TASK-001`
-- control_status: `needs_user`
+- control_status: `complete`
 - repository: `Kaetaeru/PU_Service`
 - branch/ref: `main`
 
 ## Current checkpoint
 
-The mandatory Rerun preflight was completed in order: README -> control -> STATE -> PLAN. The four authoritative/reconciliation documents agreed on run identity, sequence `0`, task `TASK-001`, and `continue`, so work resumed from the existing Next Exact Action without resetting prior validation.
+A fresh user instruction supplied `TalkFile_pickup.html` as the actual accommodation-side interface to connect. The mandatory Rerun preflight was completed again in order: README -> control -> STATE -> PLAN. Existing run identity, sequence, task and prior validation history were preserved.
 
-Repository state was then rechecked. Before TASK-001 work, the root contained only `.chatgpt-rerun`; no product implementation or additional project instructions existed. During this sequence, `docs/pickup-integration-contract.md` was created as the evidence-backed TASK-001 discovery artifact.
+The HTML was inspected directly. It is a Stay Pachira guest airport/station transfer request page that currently performs all behavior locally in browser JavaScript: direction selection, form capture, hard-coded fare estimation, result ticket generation and browser share/clipboard output. It contains no backend API call, persistence, stable request id or durable lifecycle state.
 
-The discovery contract now captures the provider-neutral service boundary, lifecycle semantics, logical entities and identifiers, idempotency/duplicate handling, error/retry classification, authentication boundaries, observability, and reconciliation requirements. Provider-specific fields, endpoints, status names, auth methods, and accommodation interfaces were deliberately not invented.
+This evidence resolves the previous ambiguity about the accommodation-side source and initial use case. The initial connection can now be defined as the HTML submit handler calling a `PU_Service` transfer-request intake API. External transport-provider behavior remains isolated behind a future provider adapter and is not required to implement the first intake slice.
 
-TASK-001 cannot yet become implementation-ready because the accommodation-side source contract and the actual pickup/transport use case/provider contract are materially undefined. The run is therefore checkpointed at `needs_user`; TASK-002 and implementation must not start yet.
+A separate technical planning folder was created as requested:
+
+- `기술적기획/README.md`
+- `기술적기획/01_HTML_분석.md`
+- `기술적기획/02_PU_Service_연결_설계.md`
+- `기술적기획/03_API_계약_초안.md`
+
+The consolidated `docs/pickup-integration-contract.md` was also reconciled with the HTML evidence.
+
+TASK-001 acceptance criteria are now satisfied at the integration-contract level. No product implementation code has been started.
 
 ## Validation record
 
 Preserved prior validation:
 
-- Verified actual GitHub repository access: `Kaetaeru/PU_Service`.
-- Verified repository had no commits/files/issues/PRs before Rerun initialization.
-- Verified default branch coordinate: `main`.
-- Confirmed no prior repository instructions or active Rerun run existed before initialization.
-- Confirmed write/admin permissions through the GitHub connector.
-- Confirmed implementation had not started.
+- actual GitHub repository access verified as `Kaetaeru/PU_Service`;
+- default branch coordinate verified as `main`;
+- original repository was empty before Rerun initialization;
+- write/admin permissions confirmed;
+- prior provider-neutral contract and validation history preserved.
 
 Validation performed in this dispatch:
 
-- Read `.chatgpt-rerun/README.md`, `control.json`, `STATE.md`, and `PLAN.md` in mandatory order.
-- Reconciled run_id `rerun-7f3c6d7a-9a31-4a9d-b54c-4b7fbb1a4d2e`, sequence `0`, and task `TASK-001` without resetting them.
-- Rechecked repository root and `.chatgpt-rerun` contents; no product code or additional project guidance was present.
-- Created `docs/pickup-integration-contract.md` without provider-specific invention.
-- Reviewed every TASK-001 acceptance criterion and recorded satisfied, partial, and unresolved items in PLAN.
-- Confirmed architecture-affecting external contracts remain unresolved, so implementation was not started.
+- mandatory Rerun files re-read in the required order;
+- repository root rechecked before planning writes;
+- `/mnt/data/TalkFile_pickup.html` read directly and confirmed as 486 lines;
+- form inputs and select options parsed from the uploaded HTML;
+- confirmed no `fetch`, `XMLHttpRequest`, axios or form action exists;
+- confirmed `navigator.share` and clipboard are the current outbound behavior;
+- extracted Stay/Port code master data and fare rules from the HTML;
+- identified that current JavaScript explicitly blocks only missing guest name/date at submit while other numeric ranges rely primarily on HTML controls;
+- documented server-authoritative fare, validation, idempotency and persistence requirements;
+- selected the concrete first boundary `POST /v1/transfer-requests` without inventing a provider API;
+- created the requested technical planning folder and API contract draft;
+- updated PLAN and integration contract to mark TASK-001 complete.
 
-## Unresolved decisions required from user
+## Remaining decisions for later tasks
 
-1. What accommodation-side system/repository/API supplies the booking/stay/pickup context, and how should `PU_Service` receive it?
-2. What exactly does "pickup/transport service" mean here: guest/passenger pickup, luggage/cargo transport, truck/vehicle dispatch, or another use case? Is there an existing provider/API?
-3. Is pickup creation automatic from accommodation events, manual/on-demand, or both?
-4. What are the scheduling rules: exact time versus window, authoritative timezone, and change/delay behavior?
-5. What are the cancellation/modification rules, and which side is authoritative after provider acceptance?
-6. Which statuses must the accommodation side see, and how does the provider expose status changes?
-7. What authentication/verification mechanisms exist on the accommodation and provider boundaries?
-8. Does this repository own persistence, API exposure, background jobs, deployment, and API gateway concerns, or only domain/integration logic?
-9. What retention/privacy constraints apply to guest/contact/location data?
+These no longer block TASK-001, but they affect TASK-002 or provider implementation:
+
+1. actual production origin/domain of the HTML;
+2. intended runtime/hosting environment for `PU_Service`;
+3. persistence technology/deployment preference;
+4. exact production address for `WSR`;
+5. external transport/driver provider or manual dispatch process;
+6. provider-side confirmation/status/cancellation/authentication rules;
+7. guest/location/flight/note retention and privacy policy.
 
 ## Next Exact Action
 
-Wait for the user to answer or point to authoritative repository/API material for the unresolved decisions above. On a fresh `continue` authorization for this same sequence, read the mandatory Rerun files again, incorporate only the newly supplied evidence into `docs/pickup-integration-contract.md`, finish TASK-001 acceptance validation, and only then select/refine TASK-002. Do not begin implementation while these architecture-affecting contracts remain unresolved.
+On a fresh `continue` authorization, read the mandatory Rerun files again and advance to `TASK-002`. Use the documents under `기술적기획/` as the starting contract, then select the concrete runtime, persistence, module structure, deployment boundary and final API/domain model for the first executable intake slice. Do not start TASK-003 implementation until TASK-002 architecture choices are recorded and validated.
