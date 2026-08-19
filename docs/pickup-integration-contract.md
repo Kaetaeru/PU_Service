@@ -2,187 +2,203 @@
 
 ## Status
 
-This document records the evidence-backed integration contract for `PU_Service` at TASK-001. It deliberately avoids provider-specific field names, endpoints, and lifecycle assumptions that are not present in the repository or user requirements.
+TASK-001 integration discovery updated from the user-provided `TalkFile_pickup.html` and the technical planning documents under `기술적기획/`.
 
-## Confirmed project intent
+The accommodation-side intake interface is now sufficiently identified to define a concrete `HTML -> PU_Service` boundary without inventing an external transport-provider API.
 
-`PU_Service` is intended to act as a service layer connecting accommodation operations with a pickup/transport service.
+## Confirmed accommodation-side interface
 
-At this checkpoint:
+The source is a browser-based Stay Pachira airport transfer request page for guest/passenger transportation.
 
-- no accommodation-side system, API, event source, or schema has been identified;
-- no pickup/transport provider or provider API has been identified;
-- no product implementation exists in this repository;
-- no authentication, cancellation, scheduling, status-mapping, persistence, or deployment contract has been supplied.
+Confirmed behavior:
 
-These missing external contracts materially affect implementation architecture and must not be guessed.
+- user manually submits one transfer request;
+- direction is `pickup` (airport/station -> stay) or `dropoff` (stay -> airport/station);
+- guest name and date are explicitly validated by current JavaScript;
+- passenger count is intended to be 1~7;
+- route uses port codes `ICN`, `GMP`, `SEOULSTN` and stay codes `PH1`, `PH2`, `PH3`, `SP5`, `SP6`, `WSR`;
+- optional fields include time, flight number, child seats, terminal transfer, and notes;
+- pickup time means flight landing time entered by the guest;
+- dropoff time means the requested accommodation collection time;
+- the browser currently calculates a fare estimate from hard-coded rules;
+- the current submit handler creates only a local result/ticket and driver message;
+- there is no server request, persistence, request identifier, or status source of truth;
+- the button labelled KakaoTalk uses browser share/clipboard behavior rather than a Kakao API integration.
 
-## Provider-neutral responsibility boundary
+## Confirmed first integration boundary
 
-Subject to the unresolved decisions below, the minimum responsibility of `PU_Service` is expected to be:
+The first implementation boundary can be defined independently of the external transport provider:
 
-1. accept or derive a pickup intent from an accommodation-side source;
-2. validate that the intent contains enough information to request transport;
-3. assign or retain a stable internal request identity and correlation context;
-4. submit the request through a provider adapter or equivalent external boundary;
-5. correlate provider acknowledgement/rejection with the internal request;
-6. ingest later provider status changes by the mechanism the provider actually supports (for example callback, polling, or another integration mechanism);
-7. expose or propagate normalized request state back to the accommodation-side consumer;
-8. handle cancellation, terminal failure, duplicate delivery, retryable transport errors, and reconciliation without creating duplicate provider jobs.
+```text
+Stay Pachira transfer HTML
+  -> POST /v1/transfer-requests
+  -> PU_Service validation
+  -> server-authoritative fare calculation
+  -> stable request identity + persistence
+  -> normalized status/lifecycle
+  -> provider adapter boundary (provider implementation deferred)
+```
 
-This is a logical service boundary, not a commitment to HTTP, webhooks, queues, polling, or any particular deployment model.
+Detailed design is recorded in:
 
-## Minimum logical entities and identifiers
+- `기술적기획/01_HTML_분석.md`
+- `기술적기획/02_PU_Service_연결_설계.md`
+- `기술적기획/03_API_계약_초안.md`
 
-The integration needs the following concepts regardless of provider-specific schema. Exact field names remain implementation decisions.
+## Required logical entities
 
-### PickupRequest
+### TransferRequest
 
-An internal record representing one requested transport operation.
+Represents one guest transfer request.
 
-Minimum identity/context requirements:
+Minimum concepts:
 
-- stable internal request identifier;
-- accommodation/source-system identifier;
-- source record/reference identifier;
-- requested pickup schedule or scheduling constraint;
-- origin and destination information at the precision required by the selected provider;
-- normalized lifecycle state;
+- stable internal `request_id`;
+- source identifier (`stay-pachira-transfer-html` initially);
+- direction;
+- guest name and passenger count;
+- service date/time and direction-derived time semantics;
+- port code and stay code;
+- optional flight number;
+- add-ons;
+- note;
+- normalized status;
+- server-authoritative fare snapshot;
 - created/updated timestamps;
-- correlation metadata needed to trace calls and events.
-
-The transported subject, passenger/load details, capacity requirements, and contact details are unresolved because the user has not yet defined the pickup use case precisely.
+- idempotency/correlation identity.
 
 ### ProviderDispatch
 
-Represents the relationship between one internal pickup request and one external provider request/job.
+Future external transport-provider correlation.
 
 Minimum concepts:
 
-- internal pickup request identifier;
+- internal request id;
 - provider identity;
-- provider-side job/reference identifier once one exists;
+- provider-side reference when available;
 - dispatch attempt identity;
-- current provider-facing outcome/status;
-- last synchronization timestamp.
+- provider state/outcome;
+- synchronization timestamp.
 
-### IntegrationAttempt
+No provider-specific schema is assumed yet.
 
-Records an outbound or inbound integration attempt sufficiently to diagnose duplicate delivery and retry behavior.
+### LifecycleEvent / IntegrationAttempt
 
-Minimum concepts:
-
-- correlation/request identity;
-- operation type;
-- attempt number or unique attempt identity;
-- success/failure classification;
-- retryability classification;
-- timestamp.
-
-### LifecycleEvent
-
-Records a meaningful pickup lifecycle transition or integration event for audit and reconciliation.
+Used for audit, retry and reconciliation.
 
 Minimum concepts:
 
-- pickup request identifier;
-- previous and resulting state where applicable;
-- event source;
-- event timestamp;
-- correlation metadata.
+- request id;
+- operation/event type;
+- source;
+- transition/outcome;
+- retryability where relevant;
+- timestamp;
+- correlation identity.
 
-## Minimum lifecycle semantics
+## Server-side validation boundary
 
-Exact enum names and provider status mappings cannot be finalized until the external provider is known. The service must nevertheless support these semantic phases:
+The browser is not authoritative.
 
-1. **Intent received** — accommodation-side pickup intent is received or detected.
-2. **Validation** — required business/integration data is accepted or rejected before dispatch.
-3. **Dispatch pending/attempted** — a provider request is prepared and submitted.
-4. **Provider accepted or rejected** — the external side either creates/accepts the job or returns a business rejection.
-5. **Active service** — later non-terminal provider states are correlated to the same request and normalized without inventing a provider-independent status vocabulary prematurely.
-6. **Completed** — transport reaches its successful terminal state.
-7. **Cancelled** — cancellation is recorded and, when required, propagated across the integration boundary.
-8. **Failed** — unrecoverable dispatch, synchronization, or business failure is recorded with a reason suitable for reconciliation.
+`PU_Service` must validate at least:
 
-Cancellation may branch from any non-terminal state allowed by the actual business/provider policy. The exact allowed transitions remain unresolved.
+- direction enum;
+- non-empty guest name;
+- passenger count 1~7;
+- valid required date;
+- valid optional time;
+- known port code;
+- known stay code;
+- child-seat count 0~4;
+- terminal-transfer rule (not valid for Seoul Station);
+- provider-independent request consistency.
+
+Maximum text lengths, past-date policy, advance-booking rules, and whether pickup flight/time becomes mandatory remain business-policy decisions.
+
+## Fare authority
+
+The existing HTML fare logic can remain as an immediate UI estimate during the first migration.
+
+`PU_Service` must recompute the fare from server-owned policy and return the authoritative total. Client-supplied fare values must not be trusted.
+
+The current source rules include:
+
+- route/area/direction/passenger-tier base fare;
+- child seat: KRW 10,000 each;
+- terminal transfer: KRW 20,000;
+- terminal transfer hidden for Seoul Station.
+
+Longer term, fare/master configuration should move away from hard-coded browser constants toward a server-owned source of truth.
 
 ## Idempotency and duplicate protection
 
-Implementation must prevent duplicate external jobs when the same accommodation-side intent or retry is delivered more than once.
+The HTML API submission requires safe retry semantics.
 
 Required behavior:
 
-- use one stable internal request identity for one logical pickup request;
-- persist correlation between the source reference, internal request, and provider job/reference;
-- make retries distinguishable from new business requests;
-- treat provider idempotency support as optional until its API is known;
-- never blindly retry a request whose provider outcome is unknown without first reconciling whether an external job was created.
+- one stable internal request identity for one logical transfer;
+- client-generated idempotency key per form submission intent;
+- same key + same payload returns the original result;
+- same key + conflicting payload is rejected;
+- timeout/unknown result does not create a second logical request;
+- future provider create/dispatch retries must reconcile unknown outcomes before repeating provider creation.
 
-The exact idempotency key format cannot be defined until the source and provider contracts are known.
+## Authentication and public-browser boundary
 
-## Retry and error classification
+The intake HTML appears to be a guest-facing browser form, so long-lived secrets must not be embedded in it.
 
-At minimum, errors must be separated into:
+Initial architecture must support:
 
-- validation/business rejection — not automatically retried;
-- authentication/authorization failure — blocked until credentials/configuration are corrected;
-- transient transport/provider failure — retryable under a bounded policy;
-- rate limiting — retried according to the provider contract;
-- timeout/unknown outcome — reconciled before a create request is repeated;
-- malformed or unmappable provider event — quarantined/logged for investigation rather than silently discarded.
+- HTTPS;
+- explicit server validation;
+- request/body limits and rate limiting;
+- restricted CORS if the HTML and API use different origins;
+- sensitive-data-aware logging;
+- separate provider credential storage when a provider is added.
 
-Retry counts, delay/backoff policy, dead-letter handling, and provider-specific error mapping remain unresolved.
+The exact hosting origin, API base URL, abuse-control mechanism, and provider authentication remain unresolved deployment/provider decisions.
 
-## Authentication and secret boundary
+## Normalized lifecycle
 
-Authentication methods are currently unknown. Architecture must leave explicit boundaries for:
+The initial intake can safely start at:
 
-- accommodation-side caller/source authentication;
-- outbound provider authentication;
-- inbound provider callback/event verification if the selected provider uses callbacks;
-- secret storage and rotation.
+- `requested`
 
-No credential type, token format, signing algorithm, or secret store is assumed here.
+Future normalized phases may include:
 
-## Observability and reconciliation requirements
+- `confirmed`
+- `dispatched`
+- `completed`
+- `cancelled`
+- `failed`
 
-The service should be able to answer, for each logical pickup request:
+The exact meaning and transitions for provider-facing phases are deferred until the transport provider/operating process is confirmed. Provider-native statuses should be preserved separately rather than guessed.
 
-- which accommodation/source record caused it;
-- whether a provider job was created and which one;
-- the last known normalized and provider state;
-- what integration attempts occurred and why they failed or retried;
-- whether the request is terminal or still requires reconciliation.
+## Remaining unresolved decisions
 
-Logs and metrics must use correlation identifiers and must avoid exposing sensitive guest/contact data unnecessarily. Retention duration and compliance requirements remain unresolved.
+The HTML evidence resolves the previous accommodation-source and pickup-use-case ambiguity. Remaining architecture/operations decisions are narrower:
 
-## Architecture-affecting unresolved decisions
+1. Where is the HTML actually hosted, and what is its production origin/domain?
+2. Where will `PU_Service` be deployed, and will the HTML call it through same-origin routing or cross-origin API access?
+3. Which runtime/framework and persistence technology should `PU_Service` use?
+4. What external transport/driver provider or manual operating process receives accepted requests?
+5. What are confirmation, dispatch, cancellation and modification policies after intake?
+6. What status information must guests/operators see after `requested`?
+7. What provider authentication/callback verification is required once a provider is selected?
+8. What retention/privacy policy applies to guest name, flight, location and note data?
+9. The `WSR` detailed address is absent from the provided HTML master data and must be confirmed before production dispatch.
 
-TASK-001 cannot become implementation-ready until the following are answered:
+## TASK-001 acceptance checkpoint
 
-1. **Accommodation source** — What system/repository/API creates the booking/stay/pickup context, and how should `PU_Service` receive it?
-2. **Pickup service meaning/provider** — What exact service is being connected? Is the transported subject guests/passengers, luggage/cargo, or another truck/transport use case, and is there an existing external provider/API?
-3. **Creation trigger** — Is pickup created automatically from a reservation/stay event, manually/on demand, or both?
-4. **Scheduling contract** — Exact timestamp or time window? Which timezone is authoritative? What happens on schedule changes or delays?
-5. **Cancellation/change policy** — Which states may be cancelled or modified, and which side is authoritative after provider acceptance?
-6. **Status interface** — What statuses must the accommodation side see, and how does the provider publish/query status?
-7. **Authentication** — How do the accommodation side and provider authenticate, and how are inbound provider events verified if applicable?
-8. **Ownership/deployment boundary** — Does `PU_Service` own persistence, public/internal API exposure, background processing, deployment, and API-gateway concerns, or only domain/integration logic?
-9. **Retention/privacy** — What guest/contact/location data may be stored and for how long?
+Satisfied from current evidence:
 
-## Acceptance checkpoint for TASK-001
+- accommodation intake source and manual creation trigger identified;
+- passenger airport/station transfer use case identified;
+- direction-specific scheduling semantics identified;
+- route/stay identifiers and fare rules extracted;
+- provider-neutral lifecycle and domain identities documented;
+- concrete HTML -> `PU_Service` API boundary selected;
+- validation, server fare authority, idempotency, error and observability requirements defined;
+- provider-specific concerns isolated behind an explicit adapter boundary rather than invented.
 
-Completed from current evidence:
-
-- provider-neutral lifecycle semantics documented;
-- minimum logical entities and identifiers documented without provider field invention;
-- integration/authentication boundaries identified;
-- idempotency, retry, observability, and reconciliation requirements documented;
-- architecture-affecting unresolved decisions enumerated explicitly.
-
-Not yet satisfied:
-
-- provider-specific and accommodation-side contracts are still unknown;
-- therefore a concrete implementation architecture/task cannot be selected safely.
-
-The next valid transition is to obtain the unresolved decisions above, then resume TASK-001 and finalize the contract before starting TASK-002.
+TASK-001 is therefore complete at the integration-contract level. Provider-specific dispatch remains a later dependency and does not block the first concrete implementation task: building the intake API/domain/persistence boundary for the supplied HTML.
