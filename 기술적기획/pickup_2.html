@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stay Pachira · Airport Transfer Request</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1d2b21;
+    --ink-2:#5a6b5d;
+    --ink-3:#8a978c;
+    --paper:#fbfaf5;
+    --card:#ffffff;
+    --leaf:#2f5d43;
+    --leaf-lite:#e8f0e9;
+    --rust:#a8532f;
+    --gold:#b4852c;
+    --gold-lite:#fbf1d9;
+    --rule:#dfe3da;
+    --rule-2:#eef0ea;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    font-family:'Inter',-apple-system,sans-serif;
+    background:var(--paper);
+    color:var(--ink);
+    line-height:1.55;
+    padding:0 0 60px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:540px;margin:0 auto;padding:0 18px;}
+
+  .stub{
+    background:var(--leaf);
+    color:#eaf1e9;
+    padding:26px 0 32px;
+    position:relative;
+  }
+  .stub::after{
+    content:"";position:absolute;left:0;right:0;bottom:-11px;height:22px;
+    background:radial-gradient(circle at 11px 11px, var(--paper) 10px, transparent 10.5px) repeat-x;
+    background-size:22px 22px;
+  }
+  .kicker{
+    font-family:'JetBrains Mono',monospace;font-size:10.5px;letter-spacing:0.22em;
+    text-transform:uppercase;opacity:0.72;
+  }
+  .stub h1{
+    font-family:'Instrument Serif',serif;font-weight:400;font-size:38px;line-height:1.05;
+    margin:9px 0 8px;letter-spacing:-0.01em;
+  }
+  .stub h1 em{font-style:italic;}
+  .stub p{font-size:13.5px;opacity:0.82;max-width:38ch;}
+
+  .dirwrap{margin:22px 0 4px;}
+  .dir{
+    display:grid;grid-template-columns:1fr 1fr;
+    border:1px solid var(--rule);border-radius:12px;overflow:hidden;background:var(--card);
+  }
+  .dir button{
+    font-family:'Inter',sans-serif;font-size:13.5px;font-weight:500;
+    padding:14px 8px;border:none;background:transparent;color:var(--ink-2);cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:3px;transition:background .16s,color .16s;
+  }
+  .dir button .arrow{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.04em;opacity:0.7;}
+  .dir button[aria-pressed="true"]{background:var(--leaf);color:#fff;}
+
+  .card{
+    background:var(--card);border:1px solid var(--rule);border-radius:14px;
+    padding:20px 18px;margin-top:14px;
+  }
+  .legend{
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;
+    color:var(--ink-3);padding-bottom:10px;margin-bottom:14px;border-bottom:1px solid var(--rule-2);
+    display:flex;justify-content:space-between;align-items:baseline;
+  }
+  .legend .n{color:var(--leaf);font-weight:500;}
+
+  .f{margin-bottom:15px;}
+  .f:last-child{margin-bottom:0;}
+  label{display:block;font-size:12.5px;font-weight:500;color:var(--ink-2);margin-bottom:6px;}
+  label .ko{color:var(--ink-3);font-weight:400;}
+  label .req{color:var(--rust);}
+  input,select,textarea{
+    width:100%;font-family:'Inter',sans-serif;font-size:16px;color:var(--ink);
+    background:var(--paper);border:1px solid var(--rule);border-radius:9px;
+    padding:12px;transition:border-color .15s,background .15s;appearance:none;
+  }
+  textarea{resize:none;height:62px;font-size:15px;}
+  input:focus,select:focus,textarea:focus{
+    outline:none;border-color:var(--leaf);background:#fff;
+    box-shadow:0 0 0 3px rgba(47,93,67,0.09);
+  }
+  select{
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='13' height='13' viewBox='0 0 24 24' fill='none' stroke='%235a6b5d' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;background-position:right 12px center;padding-right:36px;
+  }
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .hint{font-size:11.5px;color:var(--ink-3);margin-top:5px;}
+
+  .opts{display:flex;flex-direction:column;gap:8px;}
+  .opt{
+    display:flex;align-items:center;gap:10px;padding:11px 12px;border:1px solid var(--rule);
+    border-radius:9px;cursor:pointer;background:var(--paper);transition:border-color .15s,background .15s;
+    font-size:14px;
+  }
+  .opt.on{border-color:var(--gold);background:var(--gold-lite);}
+  .opt input[type=checkbox]{width:auto;flex:0 0 auto;margin:0;transform:scale(1.15);accent-color:var(--gold);}
+  .opt .price{margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:12.5px;color:var(--gold);font-weight:500;}
+  .opt .qty{width:58px;padding:6px 7px;font-size:14px;text-align:center;margin-left:auto;}
+
+  .fare{
+    margin-top:14px;border:1px solid var(--rule);border-radius:14px;background:var(--card);overflow:hidden;
+  }
+  .fare .rows{padding:14px 18px;}
+  .frow{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;font-size:14px;gap:12px;}
+  .frow .lbl{color:var(--ink-2);}
+  .frow .val{font-family:'JetBrains Mono',monospace;font-size:14px;white-space:nowrap;}
+  .frow.sub .lbl,.frow.sub .val{color:var(--ink-3);font-size:13px;}
+  .fare .total{
+    border-top:1px dashed var(--rule);padding:14px 18px;display:flex;justify-content:space-between;
+    align-items:baseline;background:var(--leaf-lite);gap:10px;
+  }
+  .fare .total .lbl{font-size:13px;font-weight:500;color:var(--leaf);}
+  .fare .total .val{font-family:'Instrument Serif',serif;font-size:27px;color:var(--leaf);white-space:nowrap;}
+  .fare .total .val small{font-family:'JetBrains Mono',monospace;font-size:12px;}
+
+  .go{
+    width:100%;margin-top:14px;font-family:'Inter',sans-serif;font-size:15px;font-weight:600;
+    color:#fff;background:var(--leaf);border:none;border-radius:11px;padding:16px;cursor:pointer;
+    transition:background .16s,transform .1s;
+  }
+  .go:hover{background:#264c37;}
+  .go:active{transform:scale(.99);}
+  .note{font-size:11.5px;color:var(--ink-3);text-align:center;margin-top:12px;line-height:1.5;}
+
+  #result{display:none;}
+  .ticket{background:var(--card);border:1px solid var(--rule);border-radius:14px;margin-top:16px;overflow:hidden;}
+  .ticket .head{
+    background:var(--leaf-lite);padding:15px 18px;border-bottom:1px solid var(--rule);
+    display:flex;align-items:center;gap:9px;
+  }
+  .ticket .head .ok{
+    width:20px;height:20px;border-radius:50%;background:var(--leaf);color:#fff;flex:0 0 auto;
+    display:flex;align-items:center;justify-content:center;font-size:12px;
+  }
+  .ticket .head span:last-child{font-size:13.5px;color:var(--leaf);font-weight:500;}
+  .ticket .body{padding:6px 18px 16px;}
+  .tr{display:flex;gap:14px;padding:9px 0;border-bottom:1px solid var(--rule-2);font-size:14px;}
+  .tr:last-child{border-bottom:none;}
+  .tr .k{
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.13em;text-transform:uppercase;
+    color:var(--ink-3);flex:0 0 84px;padding-top:3px;
+  }
+  .tr .v{flex:1;}
+  .tr .v .sec{display:block;font-size:12.5px;color:var(--ink-3);margin-top:2px;}
+  .tr.pay .v{color:var(--rust);font-weight:500;}
+
+  .msgbox{
+    margin-top:8px;background:#20372a;color:#dfe9df;border-radius:14px;padding:17px 18px;
+    font-family:'JetBrains Mono',monospace;font-size:12.5px;line-height:1.85;white-space:pre-wrap;
+    word-break:break-word;
+  }
+  .msglabel{
+    font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.16em;text-transform:uppercase;
+    color:var(--ink-3);margin:20px 0 0;text-align:center;
+  }
+  .btns{display:grid;gap:8px;margin-top:12px;}
+  .btn2{
+    font-family:'Inter',sans-serif;font-size:14.5px;font-weight:500;padding:14px;border-radius:11px;
+    cursor:pointer;border:1px solid var(--rule);background:var(--card);color:var(--ink);transition:all .15s;
+  }
+  .btn2.primary{background:var(--rust);border-color:var(--rust);color:#fff;}
+  .btn2.primary:hover{background:#93482a;}
+  .btn2:hover{background:var(--paper);}
+
+  .toast{
+    position:fixed;left:50%;bottom:26px;transform:translateX(-50%) translateY(14px);
+    background:var(--ink);color:#fff;padding:12px 22px;border-radius:30px;font-size:13.5px;
+    opacity:0;transition:all .25s;pointer-events:none;z-index:90;max-width:88%;text-align:center;
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  .foot{
+    text-align:center;margin-top:30px;font-family:'JetBrains Mono',monospace;
+    font-size:10px;letter-spacing:0.18em;color:var(--ink-3);text-transform:uppercase;
+  }
+  @media (prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+</head>
+<body>
+
+<header class="stub">
+  <div class="wrap">
+    <div class="kicker">Stay Pachira · Seoul</div>
+    <h1>Airport <em>transfer</em></h1>
+    <p>Send us your flight details and we'll have a driver ready. 공항 픽업·샌딩 예약</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div id="form">
+    <div class="dirwrap">
+      <div class="dir" role="group" aria-label="Transfer direction">
+        <button type="button" id="b-pickup" aria-pressed="true">
+          Pickup <span class="arrow">AIRPORT → STAY</span>
+        </button>
+        <button type="button" id="b-drop" aria-pressed="false">
+          Drop-off <span class="arrow">STAY → AIRPORT</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="legend"><span>Your details</span><span class="n">01</span></div>
+
+      <div class="f">
+        <label for="g-name">Main guest name <span class="req">*</span> <span class="ko">· 대표 게스트명 (영문)</span></label>
+        <input id="g-name" type="text" placeholder="e.g. Julia Hussmann" autocomplete="name">
+      </div>
+
+      <div class="f two">
+        <div>
+          <label for="g-date"><span id="lbl-date">Arrival date</span> <span class="req">*</span></label>
+          <input id="g-date" type="date">
+        </div>
+        <div>
+          <label for="g-time"><span id="lbl-time">Arrival time</span></label>
+          <input id="g-time" type="time">
+        </div>
+      </div>
+      <p class="hint" id="hint-time">Landing time on your ticket. 항공편 착륙 시각</p>
+
+      <div class="f two">
+        <div>
+          <label for="g-flight">Flight number</label>
+          <input id="g-flight" type="text" placeholder="KE938" autocapitalize="characters">
+        </div>
+        <div>
+          <label for="g-pax">Guests <span class="req">*</span></label>
+          <input id="g-pax" type="number" min="1" max="7" value="2" inputmode="numeric">
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="legend"><span>Route</span><span class="n">02</span></div>
+
+      <div class="f">
+        <label for="g-air"><span id="lbl-air">Arriving at</span></label>
+        <select id="g-air">
+          <option value="ICN">Incheon Airport (ICN)</option>
+          <option value="GMP">Gimpo Airport (GMP)</option>
+          <option value="SEOULSTN">Seoul Station</option>
+        </select>
+      </div>
+
+      <div class="f">
+        <label for="g-stay">Accommodation <span class="req">*</span> <span class="ko">· 숙소</span></label>
+        <select id="g-stay">
+          <optgroup label="Itaewon">
+            <option value="PH1">Pachira House 1F · 파키라하우스 1층</option>
+            <option value="PH2">Pachira House 2F · 파키라하우스 2층</option>
+            <option value="PH3">Pachira House 3F · 파키라하우스 3층</option>
+            <option value="SP5">Stay Pachira 5F · 스테이파키라 5층</option>
+            <option value="SP6">Stay Pachira 6F · 스테이파키라 6층</option>
+          </optgroup>
+          <optgroup label="Hongdae">
+            <option value="WSR">Wausan-ro · 와우산로</option>
+          </optgroup>
+        </select>
+        <p class="hint" id="stay-addr"></p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="legend"><span>Add-ons</span><span class="n">03</span></div>
+      <div class="opts">
+        <label class="opt" id="w-seat">
+          <input type="checkbox" id="o-seat">
+          <span>Child car seat <span class="ko">· 카시트</span></span>
+          <input type="number" id="o-seat-n" class="qty" min="1" max="4" value="1" aria-label="Number of car seats">
+        </label>
+        <label class="opt" id="w-term">
+          <input type="checkbox" id="o-term">
+          <span>Terminal transfer T1 ⇄ T2 <span class="ko">· 터미널 경유</span></span>
+          <span class="price">+20,000</span>
+        </label>
+      </div>
+      <div class="f" style="margin-top:14px;">
+        <label for="g-note">Anything we should know? <span class="ko">· 특이사항</span></label>
+        <textarea id="g-note" placeholder="e.g. 2 adults + 3 children (11, 7, 5) · 6 suitcases"></textarea>
+      </div>
+    </div>
+
+    <div class="fare">
+      <div class="rows" id="fare-rows"></div>
+      <div class="total">
+        <span class="lbl">Estimated total · 예상 요금</span>
+        <span class="val" id="fare-total">—</span>
+      </div>
+    </div>
+
+    <button class="go" id="submit">Request this transfer</button>
+    <p class="note">We'll confirm your driver's name, phone and vehicle before you travel.<br>기사님 정보는 출발 전에 안내드립니다.</p>
+  </div>
+
+  <div id="result">
+    <div class="ticket">
+      <div class="head"><span class="ok">✓</span><span id="res-head">Transfer requested</span></div>
+      <div class="body" id="res-body"></div>
+    </div>
+
+    <div class="msglabel">— For the driver · 기사님 전달용 —</div>
+    <div class="msgbox" id="msg"></div>
+
+    <div class="btns">
+      <button class="btn2 primary" id="send">Send via KakaoTalk · 카톡으로 보내기</button>
+      <button class="btn2" id="copy">Copy text · 복사하기</button>
+      <button class="btn2" id="again">New request · 새 예약</button>
+    </div>
+  </div>
+
+  <div class="foot">Stay Pachira · Itaewon, Seoul</div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  var $=function(id){return document.getElementById(id);};
+
+  var STAYS={
+    PH1:{en:"Pachira House 1F",ko:"파키라하우스 1층 (이연공방 앞)",addr:"이태원로16길 45",area:"이태원"},
+    PH2:{en:"Pachira House 2F",ko:"파키라하우스 2층 (이연공방 앞)",addr:"이태원로16길 45",area:"이태원"},
+    PH3:{en:"Pachira House 3F",ko:"파키라하우스 3층 (이연공방 앞)",addr:"이태원로16길 45",area:"이태원"},
+    SP5:{en:"Stay Pachira 5F",ko:"스테이파키라 5층 (CU건물)",addr:"보광로59길 36",area:"이태원"},
+    SP6:{en:"Stay Pachira 6F",ko:"스테이파키라 6층 (CU건물)",addr:"보광로59길 36",area:"이태원"},
+    WSR:{en:"Wausan-ro, Hongdae",ko:"와우산로 (홍대)",addr:"",area:"홍대"}
+  };
+  var PORT={ICN:{en:"Incheon Airport",ko:"인천공항"},GMP:{en:"Gimpo Airport",ko:"김포공항"},
+            SEOULSTN:{en:"Seoul Station",ko:"서울역"}};
+  var FARE={
+    ICN:{이태원:{pickup:[[1,4,90000],[5,7,100000]], drop:[[1,4,80000],[5,7,90000]]},
+         홍대:{pickup:[[1,4,85000],[5,7,90000]],  drop:[[1,4,75000],[5,7,80000]]}},
+    GMP:{이태원:{pickup:[[1,7,80000]], drop:[[1,7,80000]]},
+         홍대:{pickup:[[1,7,80000]], drop:[[1,7,80000]]}},
+    SEOULSTN:{이태원:{pickup:[[1,7,50000]], drop:[[1,7,50000]]},
+              홍대:{pickup:[[1,7,50000]], drop:[[1,7,50000]]}}
+  };
+  var SEAT=10000, TERM=20000, dir="pickup", lastMsg="";
+
+  function won(n){return n.toLocaleString('ko-KR')+"원";}
+  function base(){
+    var o=$('g-air').value, area=STAYS[$('g-stay').value].area, p=parseInt($('g-pax').value)||1;
+    var t=(FARE[o]&&FARE[o][area]&&FARE[o][area][dir])||[];
+    for(var i=0;i<t.length;i++){if(p>=t[i][0]&&p<=t[i][1])return t[i][2];}
+    return t.length?t[t.length-1][2]:0;
+  }
+  function seats(){return $('o-seat').checked?(parseInt($('o-seat-n').value)||1):0;}
+  function termOn(){return $('o-term').checked && $('g-air').value!=="SEOULSTN";}
+
+  function paint(){
+    var pick = dir==="pickup";
+    $('lbl-date').textContent = pick?"Arrival date":"Departure date";
+    $('lbl-time').textContent = pick?"Arrival time":"Pickup time";
+    $('lbl-air').textContent  = pick?"Arriving at":"Going to";
+    $('hint-time').textContent = pick
+      ? "Landing time on your ticket. 항공편 착륙 시각"
+      : "When the driver should collect you. 숙소 출발 시각";
+    $('w-term').style.display = ($('g-air').value==="SEOULSTN")?"none":"flex";
+
+    $('w-seat').className = "opt"+($('o-seat').checked?" on":"");
+    $('w-term').className = "opt"+($('o-term').checked?" on":"");
+
+    var s=STAYS[$('g-stay').value];
+    $('stay-addr').textContent = s.addr ? (s.ko+" · "+s.addr) : s.ko;
+
+    var b=base(), sc=seats()*SEAT, tc=termOn()?TERM:0;
+    var rows='<div class="frow"><span class="lbl">'+
+      (pick?PORT[$('g-air').value].en+" → "+s.en : s.en+" → "+PORT[$('g-air').value].en)+
+      '</span><span class="val">'+won(b)+'</span></div>';
+    if(sc) rows+='<div class="frow sub"><span class="lbl">Car seat × '+seats()+'</span><span class="val">+'+won(sc)+'</span></div>';
+    if(tc) rows+='<div class="frow sub"><span class="lbl">Terminal transfer</span><span class="val">+'+won(tc)+'</span></div>';
+    $('fare-rows').innerHTML=rows;
+    $('fare-total').innerHTML=won(b+sc+tc)+' <small>KRW</small>';
+  }
+
+  $('b-pickup').onclick=function(){dir="pickup";this.setAttribute('aria-pressed','true');$('b-drop').setAttribute('aria-pressed','false');paint();};
+  $('b-drop').onclick=function(){dir="drop";this.setAttribute('aria-pressed','true');$('b-pickup').setAttribute('aria-pressed','false');paint();};
+  ['g-air','g-stay','g-pax','o-seat','o-seat-n','o-term'].forEach(function(id){
+    $(id).addEventListener('change',paint); $(id).addEventListener('input',paint);
+  });
+  paint();
+
+  $('submit').onclick=function(){
+    var name=$('g-name').value.trim(), date=$('g-date').value;
+    if(!name){toast("Please enter the main guest name · 대표 게스트명을 입력해 주세요");$('g-name').focus();return;}
+    if(!date){toast("Please choose a date · 날짜를 선택해 주세요");$('g-date').focus();return;}
+
+    var time=$('g-time').value, flight=$('g-flight').value.trim().toUpperCase();
+    var pax=parseInt($('g-pax').value)||1, s=STAYS[$('g-stay').value], port=PORT[$('g-air').value];
+    var b=base(), sc=seats()*SEAT, tc=termOn()?TERM:0, total=b+sc+tc;
+    var pick=dir==="pickup", dt=date+(time?" "+time:"");
+
+    var html="";
+    html+=row("Guest",name);
+    html+=row("Guests",pax+" pax");
+    html+=row(pick?"Arrival":"Departure",dt);
+    if(flight) html+=row("Flight",flight);
+    html+=row("Route", pick?(port.en+" → "+s.en):(s.en+" → "+port.en),
+              pick?(port.ko+" → "+s.ko):(s.ko+" → "+port.ko));
+    if(seats()) html+=row("Car seat",seats()+" seat"+(seats()>1?"s":""));
+    if(tc) html+=row("Transfer","T1 ⇄ T2");
+    var nt=$('g-note').value.trim();
+    if(nt) html+=row("Notes",nt);
+    html+='<div class="tr pay"><span class="k">Fare</span><span class="v">'+won(total)+
+          '<span class="sec">Payment is arranged with your host. 지불 방법은 호스트와 확인해 주세요.</span></span></div>';
+    $('res-body').innerHTML=html;
+    $('res-head').textContent = pick?"Pickup requested":"Drop-off requested";
+
+    lastMsg=
+"🚐 "+(pick?"픽업":"드랍오프")+" 예약 안내\n"+
+"━━━━━━━━━━━━━\n"+
+(pick?"도착일시: ":"출발일시: ")+dt+"\n"+
+(flight?"항공편: "+flight+"\n":"")+
+"인원: "+pax+"명\n"+
+"대표게스트: "+name+"\n"+
+"경로: "+(pick?(port.ko+" → "+s.area):(s.area+" → "+port.ko))+"\n"+
+(pick?"도착지: ":"출발지: ")+s.ko+(s.addr?", "+s.addr:"")+"\n"+
+(seats()?"⚠️ 카시트 "+seats()+"개 필요\n":"")+
+(tc?"경유: T1 ⇄ T2 (+"+won(TERM)+")\n":"")+
+(nt?"특이사항: "+nt+"\n":"")+
+"━━━━━━━━━━━━━\n"+
+"요금: "+won(total)+
+(sc||tc?"\n  (기본 "+won(b)+(sc?" + 카시트 "+won(sc):"")+(tc?" + 경유 "+won(tc):"")+")":"")+
+"\n지불: (호스트 확인 필요)";
+
+    $('msg').textContent=lastMsg;
+    $('form').style.display="none";
+    $('result').style.display="block";
+    window.scrollTo({top:0,behavior:'smooth'});
+  };
+
+  function row(k,v,sec){
+    return '<div class="tr"><span class="k">'+k+'</span><span class="v">'+esc(v)+
+      (sec?'<span class="sec">'+esc(sec)+'</span>':'')+'</span></div>';
+  }
+  function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+
+  function copyText(cb){
+    if(navigator.clipboard&&navigator.clipboard.writeText){
+      navigator.clipboard.writeText(lastMsg).then(cb,fb);
+    } else fb();
+    function fb(){
+      var ta=document.createElement('textarea');ta.value=lastMsg;ta.style.position='fixed';ta.style.opacity='0';
+      document.body.appendChild(ta);ta.select();
+      try{document.execCommand('copy');cb();}catch(e){toast("Please select and copy the text above");}
+      document.body.removeChild(ta);
+    }
+  }
+  $('copy').onclick=function(){copyText(function(){toast("Copied · 복사되었습니다");});};
+  $('send').onclick=function(){
+    if(navigator.share){
+      navigator.share({title:"Stay Pachira transfer",text:lastMsg}).catch(function(){});
+    } else {
+      copyText(function(){toast("Copied — paste into KakaoTalk · 카톡에 붙여넣기");});
+    }
+  };
+  $('again').onclick=function(){
+    $('result').style.display="none";$('form').style.display="block";
+    $('g-name').value="";$('g-flight').value="";$('g-note').value="";
+    window.scrollTo({top:0,behavior:'smooth'});
+  };
+
+  function toast(m){var t=$('toast');t.textContent=m;t.classList.add('show');setTimeout(function(){t.classList.remove('show');},2200);}
+})();
+</script>
+</body>
+</html>
