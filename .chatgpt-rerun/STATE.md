@@ -9,109 +9,66 @@
 
 ## Current checkpoint
 
-TASK-001 remains complete. No product implementation has been started by this planning update.
+TASK-001 remains complete and product implementation has not started.
 
-The repository has been reconciled around a clear version boundary: **V1 is the internal operations MVP we use ourselves before any SaaS sale/productization work.**
+The final pre-development plan-critic pass is complete. StayOps V1 is now both product-scoped and implementation-ready at the architecture/contract level.
 
-Current canonical planning sources:
+Canonical read order:
 
 1. `기술적기획/00_CANONICAL_SYSTEM.md`
 2. `기술적기획/V1_INTERNAL_MVP.md`
-3. `기술적기획/05_DEVELOPMENT_PLAN.md`
-4. `기술적기획/README.md`
+3. `기술적기획/06_IMPLEMENTATION_READINESS.md`
+4. `기술적기획/05_DEVELOPMENT_PLAN.md`
+5. `기술적기획/README.md`
 
-Older planning documents remain evidence/detail rather than being deleted.
+## Final gap corrections
 
-## V1 boundary now fixed
+1. Removed `guest_notified` from TransferRequest state; Notification is the only message-delivery source of truth.
+2. Removed the unsupported V1 assumption that 10% VAT is automatically added to the original HTML fare. V1 authoritative Guest fare is current verified fare table + options.
+3. Added `revision` binding across TransferRequest, DriverDispatch and Notification so old Driver links/messages cannot act on modified bookings.
+4. Added `needs_reconfirmation` and assignment supersession for material edits after assignment.
+5. Replaced ambiguous `guest_paid` dispatch semantics with `payment_type`, `guest_due_krw`, `host_due_krw`, and confirmed payment instruction.
+6. Added conditional airport terminal field and child-seat age/note requirement.
+7. Made WhatsApp inbound MessageEvent request association nullable when one phone maps to multiple active transfers.
+8. Added append-only provider event dedup and out-of-order-safe Notification transitions.
+9. Added stale/cancelled Notification revalidation immediately before send.
+10. Marked WSR inactive until its exact address is known.
+11. Explicitly reject passenger counts above 7 instead of silently applying the highest fare tier.
+12. Added public endpoint security boundary: Guest/Driver browsers do not write directly to tables.
+13. Added durable Notification outbox/retry worker architecture.
+14. Fixed the V1 stack: Vite + React + TypeScript / Cloudflare Pages / Supabase Postgres + Auth + Edge Functions + RLS.
+15. Fixed V1 Driver outbound baseline to Kakao Share one-click; automatic Kakao is optional and no longer blocks V1 engineering.
 
-V1 = Development Plan Phases 0~6:
+## Current readiness
 
-- external WhatsApp/Kakao/backend feasibility;
-- managed backend/data model;
-- Guest request + WhatsApp receipt;
-- Driver dispatch + signed response;
-- Guest WhatsApp assignment return + Host manual WhatsApp conversation;
-- Host exception/recovery dashboard;
-- real internal pilot/hardening.
+**Engineering-ready:** yes.
 
-Post-V1:
+Provider-independent implementation can start using fake/test messaging adapters.
 
-- settlement automation / Excel replacement;
-- self-service multi-host onboarding;
-- SaaS billing/sales;
-- iCal;
-- cleaning/laundry;
-- AI Guest auto-replies;
-- broader StayOps modules.
+**Pilot-ready:** no.
 
-The existing operating ledger remains the settlement tool during V1. Fare/payment snapshots are still stored so later settlement migration does not require reconstructing historical values.
+Before real Guests:
 
-## V1 operational rules
-
-Normal path invariant:
-
-> Host does not manually rewrite Driver messages, re-enter Driver ETA/vehicle data, or rebuild Guest assignment notices.
-
-Allowed Host actions:
-
-- Driver selection and dispatch approval;
-- one-click Kakao share/send fallback when automatic outbound is unavailable;
-- schedule/flight/payment instruction edits;
-- cancellation/redispatch;
-- manual Guest free-text reply from WhatsApp Business App;
-- exceptional manual assignment correction as recovery only.
-
-V1 must contain recovery for common real-world failures. An internal tool that works only on the happy path is not considered usable V1.
-
-## Canonical product decisions
-
-- Product invariant: normal operations must not require the Host to copy/relay/re-enter information; Host is an exception manager.
-- First product scope: airport/station pickup and drop-off round trip.
-- Guest default contact coordinate: WhatsApp number normalized to E.164 plus opt-in evidence and preferred language.
-- Guest automated operational messages and inbound free-text: WhatsApp.
-- Host manual Guest replies: existing WhatsApp Business App when the chosen WhatsApp connection mode supports coexistence.
-- V1 does not AI-auto-reply to Guest free-text.
-- Driver channel: KakaoTalk notification plus signed Driver Response Web for accept/reject, ETA and vehicle data.
-- Driver vehicle/ETA data writes directly into `DriverAssignment`; Host does not re-enter it on the normal path.
-- TransferRequest, DriverDispatch and Notification states are separate.
-- Managed/serverless backend preferred; Supabase-style Postgres/Auth/Edge Functions is the first candidate to validate.
-- All tenant-owned data has `host_id` from the beginning, but V1 UI only needs the internal Host.
-- WhatsApp coexistence is preferred but not promised universally; future Host onboarding must test actual eligibility/connection path.
-- Kakao outbound delivery remains an external feasibility gate behind `DriverNotificationAdapter`.
-- V1 includes payment instruction/snapshot data required to tell the Driver who pays, while full settlement automation is deferred.
-
-## Plan-critic findings incorporated into V1
-
-1. **Major — Happy-path-only internal MVP would fail in real operation.**
-   - Added cancel, redispatch, notification retry, schedule change and manual exception recovery to V1.
-2. **Major — Kakao full automation could block the entire V1 on an external dependency.**
-   - V1 permits a one-click Host share/send fallback while preserving direct Driver response into StayOps.
-3. **Major — Payment responsibility was needed before real dispatch.**
-   - V1 stores payment instruction and fare/payment snapshots; full settlement is Post-V1.
-4. **Major — Sales/multi-host UI would over-expand V1.**
-   - Keep `host_id`/RLS in the data model but defer self-service onboarding, billing and generic settings UI.
-5. **Major — Previous canonical findings remain in force:** Guest WhatsApp contact, state separation, Coexistence feasibility, and Kakao adapter boundary.
-
-## Preserved validation history
-
-- actual repository verified as `Kaetaeru/PU_Service`, branch `main`;
-- original Guest transfer HTML inspected;
-- no original backend/persistence existed;
-- fare and route/stay rules were extracted;
-- client fare was classified as non-authoritative;
-- stable request identity, idempotency and persistence were identified as required;
-- Driver signed-response design was established;
-- newer StayOps requirements and MVP documents were reviewed rather than silently overwritten;
-- canonical Guest WhatsApp + Driver Kakao architecture recorded before V1 scoping.
+- actual internal WhatsApp Business inbound/outbound must be tested;
+- Host manual reply/Coexistence or equivalent operating mode must be confirmed;
+- required WhatsApp template and opt-in/privacy notice must be prepared;
+- production backup/secrets and real Driver seed must be verified;
+- real-device Kakao Share + Driver response link must pass.
 
 ## Next Exact Action
 
-Do not start sales onboarding, settlement automation, cleaning/iCal, or broad dashboard work.
+On fresh implementation authorization:
 
-On fresh `continue` authorization, execute TASK-002 against the V1 boundary:
+1. re-read mandatory Rerun files;
+2. re-read canonical/V1/readiness docs;
+3. create implementation branch `work/v1-internal` from current `main`;
+4. start TASK-003 backend foundation:
+   - Vite/React/TypeScript skeleton;
+   - Supabase structure/migrations/seed;
+   - canonical schema + RLS;
+   - fare/validation unit tests;
+   - transactional create-transfer-request boundary;
+   - fake Notification adapter;
+5. do not implement broad Admin, settlement, iCal, cleaning/laundry, AI chat, or SaaS onboarding.
 
-1. validate the internal WhatsApp Business number for inbound/outbound and Host manual-reply mode;
-2. validate/select automatic Driver Kakao outbound or the one-click V1 fallback;
-3. validate the managed backend choice;
-4. finalize V1 schema/API/RLS/token/idempotency/fare-payment snapshot contracts;
-5. only then advance to backend implementation.
+Parallel external Phase-0 work should validate the actual WhatsApp number and real-device Kakao Share before TASK-006/internal pilot.
