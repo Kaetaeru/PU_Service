@@ -1,56 +1,148 @@
-# PU_Service 기술적 기획
+# StayOps 기술적 기획 — 시작점
 
-이 폴더는 Stay Pachira 공항 픽업·샌딩 HTML과 `PU_Service`를 연결하기 위한 기술 설계 문서를 관리한다.
+이 폴더는 StayOps의 제품/기술 기획 Source of Truth를 관리한다.
 
-## 현재 확인된 연결 대상
+StayOps의 핵심 목표는 **호스트가 게스트와 파트너 사이의 수동 중계자가 되지 않게 하는 것**이다. 첫 번째 실제 제품 범위는 공항/서울역 픽업·드랍오프 왕복 자동화다.
 
-사용자가 제공한 `TalkFile_pickup.html`은 숙소 고객이 공항/서울역 ↔ 숙소 이동을 요청하는 단일 페이지 인터페이스다. 현재 페이지 자체에는 서버 API 호출, 데이터 저장, 요청 ID, 상태 조회가 없고 브라우저 내부 JavaScript만으로 요금 계산과 기사 전달용 문구 생성을 수행한다.
+## 반드시 먼저 읽을 것
 
-따라서 1차 연결 목표는 기존 UI를 최대한 유지하면서 제출 시 `PU_Service`가 요청을 서버측에서 접수하도록 바꾸는 것이다.
+새 작업이나 기획 검토를 시작할 때는 아래 순서로 읽는다.
 
-## 현재 확정된 운영 방향
+1. `00_CANONICAL_SYSTEM.md`
+2. `05_DEVELOPMENT_PLAN.md`
+3. 필요한 경우에만 아래 세부/근거 문서를 읽는다.
 
-`PU_Service`는 단순 예약 저장 API가 아니라 **고객과 기사 사이의 배차 중계 상태 머신**을 담당한다.
+두 canonical 문서와 기존 초안이 충돌하면 canonical 문서가 우선한다.
+
+---
+
+## 현재 확정된 큰 구조
 
 ```text
-고객 Transfer HTML
-  -> PU_Service 예약 접수
-  -> 기사에게 카카오 배차 요청
-  -> 기사 수락/거절 + ETA/차량번호 회신
-  -> PU_Service assignment 확정
-  -> 고객에게 카카오 배차 결과 반환
+Guest
+  - Transfer Web
+  - WhatsApp
+        |
+        v
+      StayOps
+  - managed backend
+  - request / dispatch / message / settlement state
+        |
+        +----> Driver KakaoTalk
+        |        -> signed response web
+        |        -> accept/reject + ETA + vehicle
+        |
+        +----> Guest WhatsApp
+                 -> automated operational updates
+                 -> guest free-text inbound
+
+Host
+  - StayOps Admin: exception/operation/settlement
+  - WhatsApp Business App: direct manual guest conversation
 ```
 
-카카오톡은 예약/배차 데이터의 source of truth로 사용하지 않는다. 카카오는 notification 및 사용자의 구조화된 action 전달 채널이고, 실제 상태와 이력은 `PU_Service`가 보관한다.
+정상 transfer에서는 호스트가 메시지를 복사하거나 차량번호를 재입력하지 않는다.
 
-기사의 자유 텍스트 카카오 답장을 서버가 임의로 읽는 방식에 의존하지 않는다. MVP에서는 카카오 메시지 안의 **서명된 기사 응답 링크**를 권장하고, 이후 기사 전용 카카오 챗봇 + Skill endpoint 방식으로 개선할 수 있다.
+---
 
-## 설계 원칙
+## Canonical 결정 요약
 
-1. HTML은 입력·표시를 담당하고, `PU_Service`는 서버측 검증과 영속 상태를 담당한다.
-2. 브라우저가 계산한 요금은 표시용 추정치로만 취급하고 서버가 동일 규칙으로 다시 계산해 확정한다.
-3. 브라우저에 API secret이나 provider credential을 넣지 않는다.
-4. 숙소/공항/요금표처럼 업무 규칙에 해당하는 값은 장기적으로 서버측 설정 또는 도메인 데이터로 이동한다.
-5. 하나의 논리적 예약 요청에는 하나의 안정적인 `request_id`를 부여하고 중복 제출을 방지한다.
-6. 기사 배차는 `DriverDispatch`와 `DriverAssignment`를 분리하여 알림 전송과 실제 수락을 구분한다.
-7. `driver_notified`와 `assigned`는 다른 상태다. 차량번호/ETA가 저장된 뒤에만 배차 완료로 본다.
-8. 고객의 현재 위치가 필요하면 명시적 위치 공유를 통해 좌표·정확도·수집시각을 기록하며, 배차에 필요한 기간 이상 보존하지 않는다.
-9. 카카오 발송/챗봇 구현은 adapter 경계 뒤에 두고 도메인 로직이 특정 메시지 공급자에 직접 종속되지 않게 한다.
+### Guest
 
-## 문서 구성
+- 기본 연락처 = WhatsApp 번호
+- `whatsapp_phone_e164` + opt-in을 필수 연락 계약으로 사용
+- 선호 언어 저장
+- 실시간 위치는 예약 시 필수가 아니라 픽업 직전 필요 시 별도 공유
 
-- `01_HTML_분석.md` — 현재 HTML의 입력, 요금, 제출, 공유 흐름과 기술적 문제점
-- `02_PU_Service_연결_설계.md` — 권장 연결 구조, 책임 분리, 처리 흐름, 단계별 전환 계획
-- `03_API_계약_초안.md` — HTML이 호출할 최소 API request/response 및 검증 규칙 초안
-- `04_카카오_기사배차_왕복_설계.md` — 고객 위치/정보를 기사에게 전달하고 기사 ETA·차량번호를 받아 고객에게 반환하는 왕복 배차 설계
+### WhatsApp
 
-## 현재 단계
+- Guest 자동 운영 메시지 + inbound webhook
+- Host는 가능하면 동일 번호를 WhatsApp Business App에서 계속 직접 사용
+- 선호 연결 방식 = Business App + API Coexistence
+- Coexistence 가능 여부는 호스트 onboarding 때 실제 검증
+- MVP에서는 자유대화 AI 자동응답을 하지 않음
 
-제품 코드는 아직 구현하지 않는다. 현재 우선순위는 다음과 같다.
+### Driver
 
-1. HTML -> `PU_Service` 고객 접수 계약 확정
-2. 고객 연락처/위치 수집 범위 확정
-3. 기사 알림 수단과 기사 응답 UX 확정
-4. `DriverDispatch` / `DriverAssignment` 상태 머신 확정
-5. 고객 카카오 리턴 채널 확정
-6. 그 이후 실제 backend 구현 task로 전환
+- 기본 채널 = KakaoTalk
+- 자유 텍스트 답장을 파싱하지 않음
+- signed Driver Response URL에서 수락/거절, ETA, 차량번호 입력
+- Kakao 실제 발송 공급자는 adapter 뒤에 두고 feasibility 단계에서 검증
+
+### StayOps
+
+- 예약/배차/메시지/정산의 Source of Truth
+- managed/serverless backend 사용
+- 1차 권장 방향 = Supabase 계열 Postgres/Auth/Edge Functions 구조를 검증
+- 모든 tenant-owned 데이터에 처음부터 `host_id`
+
+---
+
+## 문서 지도
+
+### 현재 Source of Truth
+
+- `00_CANONICAL_SYSTEM.md`
+  - 제품 목표
+  - actor/channel 역할
+  - Guest 입력 계약
+  - WhatsApp/기사 왕복
+  - 상태 모델
+  - canonical domain model
+  - multi-host/보안/fallback
+  - plan-critic으로 발견된 주요 문제와 수정
+
+- `05_DEVELOPMENT_PLAN.md`
+  - 실제 구현 순서
+  - 단계별 dependency
+  - 완료조건
+  - pilot 및 SaaS화 순서
+
+### 세부 분석 / 이전 초안
+
+- `01_HTML_분석.md`
+  - 최초 transfer HTML 구조/요금/제출 분석
+
+- `02_PU_Service_연결_설계.md`
+  - HTML -> backend 경계의 초기 설계
+
+- `03_API_계약_초안.md`
+  - 초기 transfer request API contract
+
+- `04_카카오_기사배차_왕복_설계.md`
+  - 기사 Kakao -> signed response -> assignment 구조의 상세 근거
+  - 단, Guest 리턴 채널은 canonical 결정에 따라 WhatsApp이 우선
+
+- `REQUIREMENTS.md`
+  - StayOps 전체 사업/운영 문제와 장기 모듈 아이디어
+
+- `MVP_SPEC.md`
+  - 기존 MVP 상세 초안
+  - 호스트 수동 차량정보 재입력 등 canonical과 충돌하는 부분은 더 이상 우선하지 않음
+
+### 운영 근거
+
+- `Stay_Pachira_픽업운영장부_2.xlsx`
+  - 실운영 요금/정산 검증 자료
+
+- `pickup_2.html`
+  - 현재 Guest transfer UI 프로토타입
+
+---
+
+## 개발 착수 기준
+
+구현은 `05_DEVELOPMENT_PLAN.md`의 순서를 따른다.
+
+첫 제품 성공 기준은 다음 하나다.
+
+```text
+Guest Form
+-> StayOps 저장
+-> Driver 요청
+-> Driver response
+-> StayOps assignment
+-> Guest WhatsApp return
+```
+
+이 한 건이 호스트의 복사/재입력 없이 실제 휴대폰에서 끝나기 전에는 청소, 세탁, iCal, AI 채팅, SaaS 과금으로 범위를 넓히지 않는다.
