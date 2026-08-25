@@ -9,60 +9,69 @@
 
 ## Current checkpoint
 
-A fresh user instruction supplied `TalkFile_pickup.html` as the actual accommodation-side interface to connect. The mandatory Rerun preflight was completed again in order: README -> control -> STATE -> PLAN. Existing run identity, sequence, task and prior validation history were preserved.
+TASK-001 remains complete. No product implementation has been started by this planning update.
 
-The HTML was inspected directly. It is a Stay Pachira guest airport/station transfer request page that currently performs all behavior locally in browser JavaScript: direction selection, form capture, hard-coded fare estimation, result ticket generation and browser share/clipboard output. It contains no backend API call, persistence, stable request id or durable lifecycle state.
+The repository later expanded from the original `PU_Service` intake concept into the broader StayOps hospitality-operations product. A plan-critic review reconciled the newer `REQUIREMENTS.md` / `MVP_SPEC.md`, the earlier HTML/API analysis, the Kakao driver round-trip design, and the latest Guest WhatsApp + Host manual-reply direction.
 
-This evidence resolves the previous ambiguity about the accommodation-side source and initial use case. The initial connection can now be defined as the HTML submit handler calling a `PU_Service` transfer-request intake API. External transport-provider behavior remains isolated behind a future provider adapter and is not required to implement the first intake slice.
+Two canonical planning documents now define the current system:
 
-A separate technical planning folder was created as requested:
+1. `기술적기획/00_CANONICAL_SYSTEM.md`
+2. `기술적기획/05_DEVELOPMENT_PLAN.md`
 
-- `기술적기획/README.md`
-- `기술적기획/01_HTML_분석.md`
-- `기술적기획/02_PU_Service_연결_설계.md`
-- `기술적기획/03_API_계약_초안.md`
+`기술적기획/README.md` is the entry point and explicitly declares the canonical read order. Older planning documents are retained as evidence/detail rather than deleted.
 
-The consolidated `docs/pickup-integration-contract.md` was also reconciled with the HTML evidence.
+## Canonical product decisions
 
-TASK-001 acceptance criteria are now satisfied at the integration-contract level. No product implementation code has been started.
+- Product invariant: normal operations must not require the Host to copy/relay/re-enter information; Host is an exception manager.
+- First product scope: airport/station pickup and drop-off round trip.
+- Guest default contact coordinate: WhatsApp number normalized to E.164 plus opt-in evidence and preferred language.
+- Guest automated operational messages and inbound free-text: WhatsApp.
+- Host manual Guest replies: existing WhatsApp Business App when the chosen WhatsApp connection mode supports coexistence.
+- MVP does not AI-auto-reply to Guest free-text.
+- Driver channel: KakaoTalk notification plus signed Driver Response Web for accept/reject, ETA and vehicle data.
+- Driver vehicle/ETA data writes directly into `DriverAssignment`; Host does not re-enter it on the normal path.
+- TransferRequest, DriverDispatch and Notification states are separate.
+- Managed/serverless backend preferred; Supabase-style Postgres/Auth/Edge Functions is the first candidate to validate.
+- All tenant-owned data has `host_id` from the beginning.
+- WhatsApp coexistence is preferred but not promised universally; Host onboarding must test actual eligibility/connection path.
+- Kakao outbound delivery remains an external feasibility gate behind `DriverNotificationAdapter`.
 
-## Validation record
+## Plan-critic material findings resolved
 
-Preserved prior validation:
+1. **Major — Host remained a manual relay in old MVP.**
+   - Corrected normal path to Driver response -> Assignment -> Guest WhatsApp automatic return.
+2. **Major — No stable asynchronous Guest contact.**
+   - Added WhatsApp contact/opt-in contract.
+3. **Major — Coexistence was at risk of being treated as universal.**
+   - Added explicit `coexistence | api_only | manual_only` connection-mode concept and onboarding feasibility gate.
+4. **Major — Dispatch and message states were conflated.**
+   - Split TransferRequest / DriverDispatch / Notification state machines.
+5. **Major — Kakao proactive delivery path is still unverified.**
+   - Isolated behind an adapter and moved validation to TASK-002/Phase 0.
 
-- actual GitHub repository access verified as `Kaetaeru/PU_Service`;
-- default branch coordinate verified as `main`;
-- original repository was empty before Rerun initialization;
-- write/admin permissions confirmed;
-- prior provider-neutral contract and validation history preserved.
+## Preserved validation history
 
-Validation performed in this dispatch:
+- actual repository verified as `Kaetaeru/PU_Service`, branch `main`;
+- original Guest transfer HTML inspected;
+- no original backend/persistence existed;
+- fare and route/stay rules were extracted;
+- client fare was classified as non-authoritative;
+- stable request identity, idempotency and persistence were identified as required;
+- driver signed-response design was established;
+- newer StayOps requirements and MVP documents were reviewed rather than silently overwritten.
 
-- mandatory Rerun files re-read in the required order;
-- repository root rechecked before planning writes;
-- `/mnt/data/TalkFile_pickup.html` read directly and confirmed as 486 lines;
-- form inputs and select options parsed from the uploaded HTML;
-- confirmed no `fetch`, `XMLHttpRequest`, axios or form action exists;
-- confirmed `navigator.share` and clipboard are the current outbound behavior;
-- extracted Stay/Port code master data and fare rules from the HTML;
-- identified that current JavaScript explicitly blocks only missing guest name/date at submit while other numeric ranges rely primarily on HTML controls;
-- documented server-authoritative fare, validation, idempotency and persistence requirements;
-- selected the concrete first boundary `POST /v1/transfer-requests` without inventing a provider API;
-- created the requested technical planning folder and API contract draft;
-- updated PLAN and integration contract to mark TASK-001 complete.
+## External capability notes
 
-## Remaining decisions for later tasks
-
-These no longer block TASK-001, but they affect TASK-002 or provider implementation:
-
-1. actual production origin/domain of the HTML;
-2. intended runtime/hosting environment for `PU_Service`;
-3. persistence technology/deployment preference;
-4. exact production address for `WSR`;
-5. external transport/driver provider or manual dispatch process;
-6. provider-side confirmation/status/cancellation/authentication rules;
-7. guest/location/flight/note retention and privacy policy.
+Current research supports WhatsApp Business App + Cloud API coexistence as a real capability with message mirroring/message echoes through supported onboarding paths, but eligibility/provider/onboarding details must be tested per Host before it becomes a sales promise.
 
 ## Next Exact Action
 
-On a fresh `continue` authorization, read the mandatory Rerun files again and advance to `TASK-002`. Use the documents under `기술적기획/` as the starting contract, then select the concrete runtime, persistence, module structure, deployment boundary and final API/domain model for the first executable intake slice. Do not start TASK-003 implementation until TASK-002 architecture choices are recorded and validated.
+Do not jump directly to broad UI or cleaning/iCal work.
+
+On fresh `continue` authorization, execute TASK-002 using `기술적기획/00_CANONICAL_SYSTEM.md` and `기술적기획/05_DEVELOPMENT_PLAN.md`:
+
+1. validate WhatsApp inbound/outbound + coexistence/manual-reply echo with a real test business number or selected provider path;
+2. validate/select the Driver Kakao outbound route or explicit one-click fallback;
+3. validate the managed backend choice;
+4. finalize implementation-ready schema/API/RLS/token/idempotency contracts;
+5. only then advance to backend implementation.
