@@ -2,115 +2,125 @@
 
 ## Project goal
 
-Build `PU_Service` as the server-side service layer behind the Stay Pachira airport transfer request interface, then connect accepted requests to the eventual transport/driver provider through an isolated adapter boundary.
+Build StayOps as a managed-backend hospitality operations system whose first executable product is a complete airport/station transfer round trip:
 
-## Task graph
+```text
+Guest Web/WhatsApp
+-> StayOps
+-> Driver Kakao + signed response
+-> StayOps assignment
+-> Guest WhatsApp
+```
 
-### TASK-001 — Define pickup-service integration contract
+The normal path must not require the host to copy, relay, or re-enter operational information. The host is an exception manager and may directly answer guest free-text messages from WhatsApp Business App when the selected WhatsApp connection mode supports coexistence.
+
+## Canonical planning sources
+
+Read these before implementation planning:
+
+1. `기술적기획/00_CANONICAL_SYSTEM.md`
+2. `기술적기획/05_DEVELOPMENT_PLAN.md`
+3. `기술적기획/README.md`
+
+Older `REQUIREMENTS.md`, `MVP_SPEC.md`, and `01~04` documents remain evidence/detail. If they conflict with the canonical documents, the canonical documents win.
+
+## TASK-001 — Define initial pickup integration contract
 
 **Status:** complete
 
-**Goal**
+Preserved validation:
 
-Turn the product intent into an implementation-ready contract for the accommodation transfer intake workflow without inventing an external provider API.
+- original Guest transfer HTML inspected;
+- browser-only fare/share behavior identified;
+- server-authoritative validation/fare/idempotency requirement established;
+- stable request identity/persistence boundary established;
+- route/stay codes and initial fare rules extracted;
+- initial driver dispatch adapter boundary established.
 
-**Evidence incorporated**
+## Planning refinement after TASK-001
 
-The user supplied `TalkFile_pickup.html`, which resolved the accommodation-side intake ambiguity. The page is a guest-facing airport/station transfer form with manual submit, direction-specific schedule semantics, stable port/stay codes, local fare calculation, and browser share/copy output. It has no backend request or persistence.
+Subsequent product decisions are now canonicalized:
 
-Technical planning artifacts were created:
+- Guest contact coordinate = WhatsApp number in E.164 form + opt-in evidence;
+- Guest operational notifications and inbound free-text = WhatsApp;
+- Host manual Guest conversation = WhatsApp Business App when coexistence is supported;
+- Driver operational channel = KakaoTalk + signed Driver Response URL;
+- Driver reply data goes directly into `DriverAssignment`; Host must not re-enter vehicle/ETA data on the normal path;
+- transfer, driver-dispatch, and notification states are separate;
+- managed/serverless backend is preferred; Supabase-style Postgres/Auth/Edge Functions is the first architecture candidate to validate;
+- all tenant-owned data has `host_id` from the start;
+- WhatsApp coexistence and Kakao outbound delivery are external feasibility gates, not assumed universal capabilities.
 
-- `기술적기획/README.md`
-- `기술적기획/01_HTML_분석.md`
-- `기술적기획/02_PU_Service_연결_설계.md`
-- `기술적기획/03_API_계약_초안.md`
-
-The consolidated contract at `docs/pickup-integration-contract.md` was updated with this evidence.
-
-**Acceptance criteria**
-
-- Pickup request lifecycle documented from intake through future provider dispatch/completion/cancellation/failure. **Satisfied at normalized/provider-neutral level.**
-- Required domain entities and identifiers listed without inventing provider fields. **Satisfied.**
-- External integration and authentication boundaries identified or explicitly deferred. **Satisfied.**
-- Error handling, idempotency, server-side fare authority, retry/reconciliation and sensitive-data considerations captured sufficiently to choose the first architecture boundary. **Satisfied.**
-- Concrete next implementation task selectable without guessing the accommodation interface or provider API. **Satisfied:** first implementation can build the HTML intake API/domain/persistence boundary while provider dispatch remains behind an adapter.
-
-**Validation**
-
-- Rerun documents were re-read in mandatory order before work.
-- Repository state was checked before adding planning artifacts.
-- Uploaded HTML was inspected directly and its form controls, client fare data, submit handler and share/copy behavior were analyzed.
-- No server call/provider API was inferred where none exists.
-- Browser fare and validation were explicitly treated as non-authoritative.
-- External provider-specific behavior remains deferred rather than invented.
-
-### TASK-002 — Select implementation architecture and finalize intake domain/API
+## TASK-002 — Feasibility + implementation architecture
 
 **Status:** ready, not started
 
-**Goal**
+### Goal
 
-Turn the technical planning contract into an implementation blueprint for the first `PU_Service` executable slice.
+Remove the external-integration risks and make the first executable slice implementation-ready without building broad product UI first.
 
-**Starting scope**
+### Required outcomes
 
-- choose runtime/framework;
-- choose persistence technology and migration strategy;
-- define source tree/module boundaries;
-- finalize `POST /v1/transfer-requests` and `GET /v1/transfer-requests/{id}`;
-- finalize domain/value objects and fare policy ownership;
-- define idempotency persistence strategy;
-- decide same-origin versus CORS deployment boundary based on actual hosting coordinates;
-- define tests for the extracted HTML fare/validation rules;
-- keep transport-provider adapter as an interface until provider details exist.
+1. Validate a real WhatsApp Business onboarding path:
+   - inbound webhook;
+   - outbound message/template;
+   - coexistence + Business App manual reply/message echo when available;
+   - explicit fallback when unavailable.
+2. Select and validate the Driver Kakao notification route or the temporary one-click fallback.
+3. Confirm managed backend/runtime choice.
+4. Finalize canonical tables, RLS/tenant isolation, idempotency, fare snapshot, signed driver response token design.
+5. Turn the current Guest input contract into an implementation-ready API/schema.
 
-**Dependencies / decisions still needed during TASK-002**
+### Acceptance criteria
 
-- actual HTML production origin/domain;
-- desired/available runtime or hosting constraints for `PU_Service`;
-- persistence/deployment preference if one already exists;
-- `WSR` production address before real dispatch;
-- provider/driver process is not required for intake implementation but is required before dispatch implementation.
+- no unverified messaging capability is required by the first implementation task;
+- backend technology and deployment boundary are explicit;
+- WhatsApp/Kakao adapters have concrete testable contracts;
+- Guest -> StayOps -> Driver -> StayOps -> Guest can be implemented as the next vertical slice;
+- no implementation of cleaning/laundry/iCal/AI inbox is required.
 
-**Acceptance criteria**
-
-- technology choices are explicit and justified;
-- API/domain/storage contracts are implementation-ready;
-- fare rules have an authoritative server representation and test vectors;
-- HTML integration path and deployment/CORS boundary are explicit;
-- provider adapter interface is defined without provider-specific fabrication;
-- TASK-003 can implement a minimal end-to-end intake path.
-
-### TASK-003 — Implement HTML intake service slice
+## TASK-003 — Backend foundation
 
 **Status:** blocked on TASK-002
 
-Provisional scope:
+Follow `05_DEVELOPMENT_PLAN.md` Phase 1.
 
-- service skeleton/config;
-- transfer request domain;
-- fare calculation;
-- persistence;
-- idempotent create API;
-- request read API;
-- validation/errors;
-- automated tests.
+## TASK-004 — Guest request + WhatsApp receipt
 
-### TASK-004 — Wire HTML and add operational/provider integration
+**Status:** blocked on TASK-003
 
-**Status:** blocked on TASK-003 and provider/operations decisions
+Follow Phase 2.
 
-Provisional scope:
+## TASK-005 — Driver dispatch round trip
 
-- replace local-only submit with API call;
-- server-response ticket/driver message;
-- loading/retry/idempotency UX;
-- provider/operator adapter and lifecycle integration when available.
+**Status:** blocked on TASK-004
+
+Follow Phase 3.
+
+## TASK-006 — Guest WhatsApp return + Host manual conversation sync
+
+**Status:** blocked on TASK-005
+
+Follow Phase 4.
+
+## TASK-007 — Host exception dashboard + pilot
+
+**Status:** blocked on TASK-006
+
+Follow Phases 5-6.
+
+## Later
+
+Settlement, multi-host productization, iCal, cleaning, laundry and other StayOps modules follow only after the transfer round trip is proven in real operations.
 
 ## Constraints
 
-- Do not embed long-lived secrets in guest HTML.
-- Client-side fare is estimate only; server fare is authoritative.
-- Do not invent transport-provider endpoints/status/auth.
+- Do not put long-lived secrets in Guest/Driver browser code.
+- Client fare is not authoritative.
+- Preserve fare snapshots for historical settlement.
+- Do not treat message delivery as driver assignment.
+- Do not auto-parse Driver Kakao free-text as the canonical response path.
+- Do not auto-reply to Guest free-text with AI in MVP.
+- Do not promise WhatsApp coexistence to every Host before onboarding validation.
+- Enforce tenant isolation at the database level.
 - Preserve Rerun run identity and validation history.
-- Use `PLAN.md -> STATE.md -> control.json` for authoritative state transitions; `STATUS.md` is projection only.
