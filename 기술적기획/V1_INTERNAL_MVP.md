@@ -1,118 +1,113 @@
 # StayOps V1 — Internal Operations MVP
 
 > 목적: 판매 전에 **우리가 실제 숙소 운영에 매일 사용할 수 있는 최소 제품**의 범위를 고정한다.
-> 기준 문서: `00_CANONICAL_SYSTEM.md`
+> 상위 규칙: `00_CANONICAL_SYSTEM.md`
+> 구현 계약: `06_IMPLEMENTATION_READINESS.md`
 > 구현 순서: `05_DEVELOPMENT_PLAN.md`
-> 상태: V1 scope canonical for release-boundary decisions
 
 ---
 
-## 1. V1의 정의
+## 1. V1 정의
 
 V1은 SaaS 판매판이 아니다.
 
-V1의 목표는 현재 운영 중인 숙소의 공항/서울역 픽업·드랍오프 업무를 실제 게스트와 실제 기사에게 사용하면서, 정상 건에서 호스트가 메시지를 복사·재작성·재입력하지 않아도 한 건의 transfer가 끝나는 것이다.
+V1의 목표는 실제 Guest와 실제 Driver를 대상으로 공항/서울역 픽업·드랍오프 한 건을 다음 흐름으로 끝내는 것이다.
 
 ```text
 Guest Transfer Web
 -> StayOps
--> Guest WhatsApp 접수 확인
--> Driver Kakao 배차 요청
+-> Guest WhatsApp receipt
+-> Driver Kakao Share/notification
 -> signed Driver Response
 -> DriverAssignment
--> Guest WhatsApp 배차 결과
--> 운행 완료
+-> Guest WhatsApp assignment
+-> completed
 ```
 
-V1에서 호스트는 다음 역할만 맡는다.
+정상 건에서 Host가 하지 않아야 하는 일:
 
-- 배차 시작/기사 선택 같은 명시적 운영 승인
-- 예외 확인 및 복구
-- 게스트 자유 문의에 대한 수동 WhatsApp 답장
-- 일정/항공편 변경, 취소, 재배차 같은 운영 판단
-- 필요 시 예외적인 수동 보정
+- 기사 메시지 수동 재작성
+- 기사 ETA/차량번호 재입력
+- Guest 배차안내 재작성/복사
 
-정상 플로우에서 차량번호, ETA, 기사정보 또는 게스트 안내문을 복사해서 다시 입력하지 않는다.
+Host가 V1에서 하는 일:
+
+- 기사 선택과 dispatch 승인
+- payment instruction 확인
+- 일정 변경/취소/재배차
+- 실패한 메시지 retry
+- Guest 자유 문의에 WhatsApp Business App으로 수동 답장
+- 예외 상황의 manual correction
+- 운행 완료 처리
 
 ---
 
-## 2. Plan-Critic으로 고정한 V1 경계
+## 2. V1 범위
 
-### Major A — "내부용"을 이유로 실패 복구를 빼면 실사용할 수 없음
-
-실제 운영에서는 기사 무응답, 메시지 실패, 일정 변경, 취소가 반드시 발생한다.
-
-**V1 수정:** exception dashboard와 최소 복구 액션을 V1 필수로 포함한다.
-
-### Major B — Kakao 완전자동화를 V1의 선행조건으로 만들면 외부 공급자 때문에 제품 전체가 막힐 수 있음
-
-기사 응답은 구조화되어야 하지만 기사 알림 자체는 내부 운영 단계에서 한 번의 operator action을 허용할 수 있다.
-
-**V1 수정:**
-
-- 선호: `DriverNotificationAdapter`가 Kakao 메시지를 자동 전송
-- 허용 fallback: Host가 StayOps에서 생성된 배차 메시지를 **한 번의 share/send action**으로 기사에게 전달
-- 금지: Host가 기사 메시지를 수동으로 재작성하거나 차량정보를 다시 입력
-
-즉 V1의 핵심 자동화 경계는 "기사 알림을 누가 클릭해 보내는가"가 아니라 **기사 응답 이후 정보가 StayOps로 직접 들어와 Guest에게 자동 반환되는가**다.
-
-### Major C — 내부 실사용에는 payment 책임 정보가 필요함
-
-기사에게 누가 얼마를 받는지 불명확하면 실제 현장에서 다시 문의가 생긴다.
-
-**V1 수정:** dispatch 전에 최소 payment instruction 상태를 가진다.
+V1 = `05_DEVELOPMENT_PLAN.md` Phase 0~6.
 
 ```text
-payment_type = host | guest | split
-
-guest_paid / guest_due
-host_amount
+Phase 0  external feasibility
+Phase 1  backend/data foundation
+Phase 2  Guest request + WhatsApp receipt
+Phase 3  Driver dispatch + signed response
+Phase 4  Guest WhatsApp return + Host manual conversation
+Phase 5  Host exception dashboard
+Phase 6  internal pilot/hardening
 ```
 
-정책 자동화가 아직 완성되지 않은 경우 Host가 dispatch 전 한 번 확인/수정할 수 있다. 이 값은 기사 메시지와 정산용 snapshot에 사용한다.
-
-### Major D — 판매용 멀티호스트 기능을 V1에 넣으면 범위가 불필요하게 커짐
-
-**V1 수정:** DB에는 `host_id`와 tenant isolation을 유지하지만, self-service host onboarding / billing / 범용 설정 UI는 V1 밖으로 둔다.
+V1 release gate는 Phase 6 완료다.
 
 ---
 
-## 3. V1에서 실제로 사용하는 대상
+## 3. V1에서 제외
+
+- 정산 자동화/Excel 대체
+- Host self-service signup/onboarding
+- SaaS billing/sales
+- 범용 multi-host settings UI
+- iCal
+- 청소/세탁
+- AI Guest auto-reply
+- StayOps full WhatsApp inbox
+- automatic flight tracking
+- 복잡한 GPS/live tracking
+- multi-driver fan-out marketplace
+
+V1 동안 기존 운영 장부를 계속 사용한다. 단, 이후 이관을 위해 fare/payment snapshot은 V1부터 보존한다.
+
+---
+
+## 4. 사용자
 
 ### Guest
 
-로그인하지 않는다.
-
-사용:
+로그인 없음.
 
 - Guest Transfer Web
 - WhatsApp
 
 ### Driver
 
-로그인하지 않는다.
+로그인 없음.
 
-사용:
-
-- KakaoTalk 배차 요청
+- KakaoTalk
 - signed Driver Response Web
 
 ### Host / Operator
 
-내부 운영 계정으로 로그인한다.
-
-사용:
+내부 계정으로 로그인.
 
 - StayOps Admin
 - WhatsApp Business App
 
-V1에는 일반 고객이 가입하는 계정 체계가 없다.
+V1에는 외부 Host 가입 화면이 없다.
 
 ---
 
-## 4. V1 Guest 입력 계약
+## 5. Guest 입력
 
-### Guest contact — 필수
+### Contact — 필수
 
 ```text
 guest_name
@@ -123,9 +118,9 @@ whatsapp_opt_in_at
 whatsapp_opt_in_policy_version
 ```
 
-WhatsApp 번호가 Guest의 기본 연락 좌표다.
+WhatsApp 번호가 기본 연락 좌표다.
 
-### Transfer — 필수/조건부
+### Transfer
 
 ```text
 direction = pickup | dropoff
@@ -135,215 +130,275 @@ flight_no
 passenger_count
 large_luggage_count
 port_code
+terminal_code
 stay_code
 child_seat_count
+child_seat_notes
 terminal_transfer
 special_request
 ```
 
 규칙:
 
-- pickup의 time = scheduled flight landing time
-- dropoff의 time = accommodation pickup time
-- airport pickup에서는 flight number를 필수로 한다.
-- passenger 기본 서비스 범위 = 1~7
-- `large_luggage_count`를 별도 구조화 필드로 받는다.
-- 서울역에서는 terminal transfer를 허용하지 않는다.
-- client fare는 표시용이며 server fare snapshot이 권위값이다.
+- pickup time = scheduled landing time
+- dropoff time = accommodation pickup time
+- airport pickup이면 flight number 필수
+- passenger_count = 1..7
+- 8명 이상은 자동예약하지 않고 Host 문의
+- ICN terminal = T1/T2/UNKNOWN
+- GMP terminal = DOMESTIC/INTERNATIONAL/UNKNOWN
+- child_seat_count > 0이면 아동 연령 정보가 포함된 notes 필수
+- SEOULSTN에서는 terminal_transfer 금지
+- timezone = Asia/Seoul
 
-### V1에서 받지 않아도 되는 것
-
-- 실시간 GPS 위치: 기본 V1 필수가 아님
-- 여권 정보
-- 이메일
-- 별도 일반 전화번호
-
-실시간 위치는 pilot에서 필요성이 확인되면 request-scoped location link로 추가한다.
+실시간 GPS는 V1 필수가 아니다.
 
 ---
 
-## 5. V1 정상 플로우
+## 6. Fare / Payment
 
-### 5.1 Guest request
+### Fare
+
+V1 Guest-facing 금액:
 
 ```text
-Guest form submit
--> validation
--> authoritative fare calculation
--> TransferRequest 저장
--> request_id 생성
--> WhatsApp receipt
+base_fare_krw + option_fare_krw = total_fare_krw
 ```
 
-### 5.2 Dispatch 준비
+- server가 authoritative fare를 계산
+- 현재 검증된 HTML fare table을 초기 seed로 사용
+- rule이 없으면 error
+- 예약 당시 snapshot을 보존
+- **V1에서 VAT 10%를 암묵적으로 추가하지 않음**
 
-StayOps는 다음을 기사에게 보낼 수 있는 상태여야 한다.
+### Payment instruction
 
-- 서비스 날짜/시간
-- pickup/dropoff
-- flight
-- passenger / luggage
-- route / stay
-- add-ons
-- guest display name
+```text
+payment_type = pending | host | guest | split
+payment_instruction_status = pending | confirmed
+guest_due_krw
+host_due_krw
+```
+
+```text
+guest_due_krw + host_due_krw = total_fare_krw
+```
+
+payment instruction이 confirmed가 아니면 dispatch하지 않는다.
+
+실제 수금/입금 완료 관리는 Post-V1 정산 범위다.
+
+---
+
+## 7. 정상 플로우
+
+### Guest request
+
+```text
+Guest form
+-> validation
+-> authoritative fare
+-> TransferRequest revision=1
+-> WhatsApp receipt Notification
+```
+
+### Dispatch preparation
+
+Host가 확인:
+
+- required info
+- fare snapshot
 - payment instruction
-- signed response URL
+- Driver
 
-기사 선택은 V1에서 Host가 할 수 있다.
+그 뒤 DriverDispatch를 생성한다.
 
-### 5.3 Driver response
+### Driver outbound
+
+V1 baseline:
+
+```text
+StayOps dispatch message
+-> Kakao Share one-click
+-> Host가 기사 채팅방 선택
+```
+
+검증된 automatic Kakao adapter가 있으면 대체 가능하다.
+
+Host가 메시지를 직접 재작성하지 않는다.
+
+### Driver response
+
+Driver Response Web:
 
 ```text
 Accept / Reject
 ETA
 Vehicle plate
-Driver name
-Driver phone
 Vehicle model/color optional
 ```
 
-수락 후 Host가 이 정보를 재입력하지 않는다.
+Driver name/phone은 master를 prefill할 수 있다.
 
-### 5.4 Guest return
+### Assignment
 
-DriverAssignment가 확정되면 StayOps가 Guest WhatsApp으로 자동 안내한다.
+Driver accept는 transaction에서:
 
-최소 내용:
+- token 유효성
+- dispatch 상태
+- request status/revision
+- active assignment 부재
+
+를 확인한 뒤 Assignment를 만든다.
+
+### Guest return
+
+active DriverAssignment 생성 후 Guest WhatsApp Notification을 queue한다.
+
+최소 안내:
 
 - booking/reference
 - driver name
 - vehicle plate
-- ETA 또는 확정 픽업시각
+- ETA/pickup time
 - meeting point
-- driver contact (운영 정책상 허용 시)
+- driver contact if policy allows
 
-### 5.5 Completion
+### Completion
 
-Host가 운행 완료를 확인하거나 운영 규칙에 따라 `completed`로 마감한다.
-
-V1에서는 복잡한 자동 trip tracking이 필요하지 않다.
+V1은 Host가 completed 처리할 수 있다. 자동 trip tracking은 필요 없다.
 
 ---
 
-## 6. V1 Host Admin — 최소 화면
+## 8. Revision과 변경
 
-V1 Admin은 CRM 전체가 아니라 **운영 및 예외 복구 화면**이다.
+TransferRequest는 `revision`을 가진다.
 
-### 6.1 Today / Upcoming
+material edit:
 
-표시:
+- date/time/direction
+- route/stay/terminal
+- flight
+- passenger/luggage
+- child seat/terminal transfer
+- payment instruction
+
+수정 시 `revision += 1`.
+
+DriverDispatch는 생성 당시 `request_revision`을 저장한다. 오래된 revision의 token은 수락할 수 없다.
+
+assignment 이후 material edit:
+
+```text
+assigned
+-> needs_reconfirmation
+-> old assignment superseded
+-> new/reconfirmed dispatch
+-> assigned
+```
+
+---
+
+## 9. V1 WhatsApp
+
+내부 운영 WhatsApp Business 번호 1개를 먼저 연결한다.
+
+목표:
+
+- Guest inbound webhook
+- StayOps outbound operational message
+- Host가 WhatsApp Business App에서 수동 답장
+- 가능하면 Host sent-message echo 저장
+- provider message/event dedup
+
+필수 자동 메시지:
+
+1. request received
+2. driver assigned / vehicle information
+3. Host가 확정한 주요 schedule change
+
+Guest 자유 메시지에는 AI 답변을 하지 않는다.
+
+여러 활성 transfer가 같은 번호에 있으면 message를 임의 예약에 연결하지 않는다.
+
+실제 번호의 Coexistence/동등 경로는 Pilot 전 외부 게이트다.
+
+---
+
+## 10. V1 Driver / Kakao
+
+필수:
+
+- DriverDispatch 생성
+- 기사 메시지 자동 구성
+- signed response token
+- accept/reject
+- ETA/vehicle
+- expiry/revocation
+- stale revision 거부
+- reject/timeout redispatch
+- one request -> one active assignment
+
+Kakao 자동 발송은 V1 필수가 아니다. 공식 Kakao Share 기반 one-click을 V1 baseline으로 사용할 수 있다.
+
+---
+
+## 11. V1 Host Admin
+
+CRM 전체가 아니라 **운영/예외 복구 UI**다.
+
+### Today / Upcoming
 
 - 오늘/내일 transfer
 - Guest
-- service time
+- time
 - route
 - transfer status
-- driver/vehicle if assigned
+- Driver/vehicle
 
-### 6.2 Needs Attention
+### Needs Attention
 
-최우선 표시:
-
-- driver not assigned
-- dispatch rejected
-- dispatch expired / no response
-- WhatsApp send failed
-- guest message needs host reply
+- payment pending
 - missing required information
+- terminal UNKNOWN
+- driver not assigned
+- dispatch rejected/expired
+- needs_reconfirmation
+- WhatsApp failed
+- Guest message needs reply/association
 - schedule conflict
 - capacity warning
 - cancelled/changed after dispatch
 
-### 6.3 Request detail actions
+### Request detail actions
 
-V1 필수:
-
-- Guest/route/request 상세 조회
-- 시간/항공편 수정
-- payment instruction 확인/수정
-- 기사 선택 및 배차 요청
-- 기사 재배차
+- request 상세
+- schedule/flight/route/payment 수정
+- Driver 선택/dispatch
+- redispatch
 - cancel
 - notification retry
 - WhatsApp conversation 열기
-- 예외 상황에서 manual assignment 입력/수정
-- completed 처리
+- exceptional manual assignment correction + reason
+- completed
 
-`manual assignment`는 정상 경로가 아니라 비상 복구 기능이다.
+manual assignment는 정상 경로가 아니라 recovery다.
 
 ---
 
-## 7. V1 WhatsApp 범위
+## 12. V1 Backend
 
-우리 내부 운영에 사용하는 WhatsApp Business 번호 1개를 먼저 연결한다.
+관리형 backend 사용.
 
-V1 목표 모드:
+확정 구현 방향:
 
 ```text
-coexistence
+Supabase Postgres
+Supabase Auth
+Supabase Edge Functions
+RLS
+Notification durable outbox + scheduled retry worker
 ```
-
-필수 검증:
-
-- Guest inbound webhook
-- StayOps outbound operational message
-- Host가 WhatsApp Business App에서 같은 대화를 읽음
-- Host의 Business App 수동 답장
-- 가능하면 message echo를 StayOps 이력에 반영
-- provider message id dedup
-
-### V1 자동 메시지
-
-필수:
-
-1. transfer request received
-2. driver assigned / vehicle information
-3. 운영자가 발생시킨 주요 schedule change 안내
-
-그 외 체크인/체크아웃/후기 요청 자동화는 V1 밖이다.
-
-### 자유 메시지
-
-AI 자동 답변을 하지 않는다.
-
-```text
-Guest free-text
--> webhook/message event
--> needs_host_reply
--> Host가 WhatsApp Business App에서 수동 답장
-```
-
----
-
-## 8. V1 Driver / Kakao 범위
-
-V1의 필수는 **기사 응답의 구조화**다.
-
-필수:
-
-- 배차 요청 메시지 생성
-- signed response URL
-- accept/reject
-- ETA/vehicle 입력
-- token expiry/invalid state 검사
-- reject/timeout 후 redispatch
-- one request -> one active assignment 보장
-
-### Kakao 발송 수준
-
-둘 중 하나면 V1 운영 가능:
-
-A. 자동 Kakao outbound adapter
-
-B. Host가 StayOps에서 누르는 one-click share/send fallback
-
-B를 사용해도 메시지 내용은 StayOps가 생성하고, 기사 응답은 signed web으로 StayOps에 직접 돌아와야 한다.
-
----
-
-## 9. V1 Backend / 데이터
-
-관리형 backend를 사용한다. 첫 후보는 Supabase이며 Phase 0 spike로 확정한다.
 
 필수 domain:
 
@@ -358,170 +413,104 @@ Notification / MessageEvent
 FareRule
 ```
 
-필수 기술 동작:
+모든 tenant-owned row에 host_id를 둔다. V1 UI는 내부 Host 하나만 지원해도 되지만 RLS는 처음부터 검증한다.
 
-- migrations
-- auth for internal Host
-- `host_id`
-- tenant isolation/RLS
-- server-authoritative fare
-- fare snapshot
-- idempotent Guest create
-- signed Driver token
-- audit timestamps/events
-- notification dedup/retry state
-
-### V1의 멀티호스트 범위
-
-DB 구조와 RLS는 멀티호스트를 견딜 수 있어야 하지만 UI는 **우리 내부 Host만 운영 가능하면 충분**하다.
+Public Guest/Driver browser는 DB에 직접 write하지 않고 Edge Function을 통한다.
 
 ---
 
-## 10. V1 실패/복구 규칙
+## 13. V1 Failure / Recovery
 
-### WhatsApp send failed
+### WhatsApp fail
 
 ```text
-notification failed
+Notification failed
 -> Needs Attention
 -> retry
--> 필요 시 Host가 WhatsApp App에서 직접 안내
+-> 필요 시 Host manual WhatsApp
 ```
 
-### Driver reject
+### Driver reject/timeout
 
 ```text
-Dispatch A rejected
--> Host가 다른 Driver 선택
--> Dispatch B
+Dispatch rejected/expired
+-> Host next Driver
+-> new Dispatch
 ```
 
-### Driver timeout
+### Stale driver link
 
-```text
-Dispatch expired
--> Needs Attention
--> redispatch
-```
-
-### Guest schedule change
-
-Host가 request를 수정한다.
-
-이미 assignment가 있다면:
-
-- 기존 assignment를 조용히 덮어쓰지 않는다.
-- change/audit event를 남긴다.
-- 기사 재확인/재배차 필요 상태를 표시한다.
-- Guest에게 변경 확정 내용을 다시 안내한다.
+request revision이 바뀌면 old token accept를 거부한다.
 
 ### Cancellation
 
-- cancelled request는 새 assignment를 받을 수 없다.
-- 이미 기사에게 보낸 dispatch가 있으면 취소 사실을 운영자에게 명확히 표시한다.
+cancelled request는 새 assignment를 받을 수 없다. stale queued Notification은 보내지 않는다.
+
+### WSR
+
+정확한 주소가 없으므로 주소 확정 전 V1에서 inactive.
 
 ---
 
-## 11. V1에 포함하지 않는 것
+## 14. V1 Release Gate
 
-다음은 판매 전 내부 MVP의 필수 조건이 아니다.
+### E2E
 
-- Host self-service signup/onboarding
-- SaaS billing/subscription
-- host-specific public settings UI 전체
-- 여러 WhatsApp 계정의 범용 onboarding UI
-- AI Guest auto-reply
-- StayOps 자체 full WhatsApp inbox
-- iCal 자동 수집
-- 청소/세탁 자동화
-- 체크인/체크아웃 자동 메시지 전체
-- 자동 flight tracking
-- 복잡한 GPS/live tracking
-- 기사 다중 fan-out marketplace
-- 정산 자동화 전체
-- Excel 대체
-
-V1 동안 월말 정산은 기존 운영 장부를 계속 사용한다.
-
-단, 이후 정산 이관을 위해 fare/payment snapshot 데이터는 V1부터 보존한다.
-
----
-
-## 12. V1과 개발 Phase 매핑
-
-`05_DEVELOPMENT_PLAN.md` 기준:
-
-```text
-Phase 0  External feasibility      -> V1 필수
-Phase 1  Backend foundation        -> V1 필수
-Phase 2  Guest Request             -> V1 필수
-Phase 3  Driver round trip         -> V1 필수
-Phase 4  Guest WhatsApp return     -> V1 필수
-Phase 5  Host exception dashboard  -> V1 필수
-Phase 6  Pilot hardening           -> V1 release gate
-
-Phase 7  Settlement                -> Post-V1
-Phase 8  Multi-host productization -> Post-V1 / 판매 준비
-Phase 9  Broader StayOps           -> Post-V1
-```
-
-따라서 **V1 = Phase 0~6**이다.
-
----
-
-## 13. V1 Release Gate
-
-V1은 코드가 존재한다고 완료가 아니다.
-
-다음을 만족해야 내부 실사용 V1로 간주한다.
-
-### End-to-end
-
-- 실제 Guest mobile form 제출
+- 실제 Guest mobile form
 - 실제 DB 저장
-- 실제 Guest WhatsApp 접수 확인
-- 실제 Driver가 Kakao/one-click 전달을 통해 배차 요청 수신
-- 실제 Driver가 signed page에서 응답
-- Assignment가 Host 재입력 없이 저장
-- 실제 Guest WhatsApp으로 차량/ETA 안내 도착
+- 실제 Guest WhatsApp receipt
+- 실제 Driver Kakao Share/notification
+- 실제 Driver signed response
+- Host 재입력 없이 Assignment
+- 실제 Guest WhatsApp assignment 도착
 
-### Host operations
+### Host operation
 
-- Host가 정상 요청에서 데이터를 복사/재작성하지 않아도 됨
-- driver reject/timeout을 재배차 가능
-- 일정 변경/취소 가능
-- WhatsApp failure를 발견하고 복구 가능
-- Guest free-text에 WhatsApp Business App에서 수동 답장 가능
+- 정상 건은 복사/재작성 불필요
+- reject/timeout redispatch 가능
+- change/cancel/reconfirmation 가능
+- WhatsApp failure retry 가능
+- Guest free-text manual reply 가능
 
 ### Reliability
 
-- duplicate Guest submit이 중복 예약을 만들지 않음
-- expired/duplicate Driver response가 assignment를 중복 생성하지 않음
-- notification retry가 동일 운영 메시지를 무제한 중복 발송하지 않음
-- audit trail로 주요 변경 원인을 확인할 수 있음
+- duplicate Guest submit 방지
+- stale/expired Driver token 방지
+- simultaneous accept에서 active assignment 하나
+- stale Notification 발송 방지
+- webhook duplicate/out-of-order 안전
+- audit trail 확인 가능
 
 ### Pilot
 
-목표:
-
-- 실제 운영 transfer 약 20건 이상을 V1 후보로 처리
-- P0/P1급 미해결 운영 장애가 없음
-- 정상 transfer의 대부분이 Host의 복사/재입력 없이 완료
-- 남은 수동 작업은 "의사결정/예외 대응"인지 "불필요한 중계"인지 구분해 기록
+- 실제 transfer 약 20건 이상
+- P0/P1급 미해결 운영 장애 없음
+- 정상 transfer 대부분이 Host 중계 없이 완료
+- 남은 수동 작업을 의사결정/예외와 불필요 중계로 구분해 기록
 
 ---
 
-## 14. V1 이후
+## 15. Pilot 전 외부 체크
 
-V1이 실제 운영에서 안정화되면 다음 순서로 확장한다.
+- 실제 WhatsApp Business inbound/outbound
+- Host manual reply 운영 경로
+- 필요한 WhatsApp template
+- opt-in/privacy notice
+- production secrets/backups
+- 실제 fare table 확인
+- 실제 Driver 목록
+- Kakao Share real-device 확인
+- WSR inactive 또는 주소 확정
+
+---
+
+## 16. V1 이후
 
 ```text
 V1 internal-use proven
--> Settlement / operating tools
--> Multi-host onboarding / productization
--> External host pilot
--> Sales
--> iCal / cleaning / laundry / broader StayOps
+-> settlement/operating tools
+-> multi-host productization
+-> external Host pilot
+-> sales
+-> iCal/cleaning/laundry/broader StayOps
 ```
-
-판매 준비는 V1과 같은 프로젝트가 아니라 **검증된 내부 운영 제품을 범용화하는 다음 단계**로 취급한다.
