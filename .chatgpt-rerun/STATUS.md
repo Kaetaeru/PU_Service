@@ -6,11 +6,13 @@ Human-facing projection only. Do not use this file as reconciliation source of t
 - Run: `rerun-7f3c6d7a-9a31-4a9d-b54c-4b7fbb1a4d2e`
 - Sequence: `0`
 - Status: `complete`
-- Current task: `TASK-001 — Define pickup-service integration contract`
+- Current control task: `TASK-001 — complete`
 - Implementation started: no
-- Discovery artifact: `docs/pickup-integration-contract.md`
-- Technical planning: `기술적기획/`
-- Last meaningful checkpoint: the supplied Stay Pachira transfer HTML was analyzed as the actual accommodation-side input interface. Its local form, fare rules, submit flow and browser share behavior were mapped to a concrete HTML -> `PU_Service` intake API boundary. Server-authoritative validation/fare, persistence, request identity and idempotency are planned; external provider behavior remains behind a future adapter.
-- Next task: `TASK-002 — Select implementation architecture and finalize intake domain/API`
+- Canonical system: `기술적기획/00_CANONICAL_SYSTEM.md`
+- Development plan: `기술적기획/05_DEVELOPMENT_PLAN.md`
+- Planning entry point: `기술적기획/README.md`
+- Latest planning checkpoint: StayOps now uses Guest WhatsApp + Driver Kakao + managed backend as the canonical transfer architecture. Host manual Guest replies remain in WhatsApp Business App when coexistence is supported; normal transfer flow returns Driver ETA/vehicle data directly to Guest without Host re-entry.
+- Plan-critic result: old MVP manual-relay conflict, missing Guest contact, universal coexistence assumption, conflated dispatch/message state, and unverified Kakao outbound path were corrected or isolated behind explicit feasibility gates.
+- Next task: `TASK-002 — feasibility + implementation architecture`
 
-TASK-001 is complete. A future `continue` should begin TASK-002 after the mandatory Rerun read/reconciliation cycle; do not start implementation before TASK-002 is recorded and validated.
+A future `continue` should first validate WhatsApp/Kakao external paths and the managed backend choice, then finalize schema/API/RLS/token contracts. Do not start broad UI, cleaning, laundry, iCal or AI chat work before the transfer round trip is proven.
