@@ -18,6 +18,32 @@ StayOps의 핵심 목표는 **Host가 Guest와 Partner 사이의 수동 중계�
 
 충돌 시 위 순서가 우선한다.
 
+현재 실제 외부 연동 검증 진행상황은 `PHASE0_VALIDATION_STATUS.md`에서 별도로 추적한다. 이 파일은 canonical 요구사항을 바꾸는 문서가 아니라 **Phase 0 실행 증거/체크포인트**다.
+
+---
+
+## 현재 Phase 0 상태 — 2026-09-04
+
+상세 증거: `PHASE0_VALIDATION_STATUS.md`
+
+```text
+[PASS] Meta Test WABA / Test Number 준비
+[PASS] Test Number -> 실제 WhatsApp 단말 outbound
+[PASS] Supabase Edge Function webhook verification
+[PASS] StayOps app -> Test WABA subscription
+[PASS] 실제 WhatsApp 단말 -> Meta -> Supabase inbound POST 200
+[PASS] inbound messages payload parse
+
+[TODO] production raw webhook logging 제거/축소
+[TODO] 실제 숙소 WhatsApp Business 번호 Coexistence
+[TODO] 실제 번호 outbound/inbound + Host manual reply
+[TODO] production template
+[TODO] opt-in/privacy 문구
+[TODO] Kakao Share real-device Driver link test
+```
+
+**중요:** 실제 숙소 운영 WhatsApp Business 번호에는 아직 migration/disconnect/Coexistence 작업을 시작하지 않았다. 테스트 번호 검증과 실제 번호 검증을 혼동하지 않는다.
+
 ---
 
 ## 현재 큰 구조
@@ -135,6 +161,10 @@ Transfer material edit마다 revision을 올리고 old Driver token/Notification
 - `V1_INTERNAL_MVP.md`
 - `06_IMPLEMENTATION_READINESS.md`
 - `05_DEVELOPMENT_PLAN.md`
+
+## 현재 실행 상태 / 검증 증거
+
+- `PHASE0_VALIDATION_STATUS.md`
 
 ## 이전 근거 / 초안
 
