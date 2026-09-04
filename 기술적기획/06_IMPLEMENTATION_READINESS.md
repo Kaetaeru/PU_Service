@@ -16,14 +16,24 @@
 
 1. 내부에서 실제 사용할 WhatsApp Business 번호의 API inbound/outbound 확인
 2. 같은 번호에서 Host 수동 대화를 유지할 수 있는 Coexistence 또는 동등 운영 경로 확인
-3. 실제 business-initiated 운영 template 발송 확인
-4. Guest opt-in 문구/개인정보 안내 확정
+3. Guest 운영 template 승인/발송 확인
+4. 대표기사 배차 요청 template 승인 및 실단말 수신 확인
+5. 대표기사 단말에서 URL 버튼 -> signed 배차 응답 Web 정상 오픈 확인
+6. 대표기사 연락처 확보, WhatsApp 사용 가능 여부, opt-in 증거
+7. Guest opt-in 문구/개인정보 안내 확정
 
-Kakao 자동발송은 V1 release blocker가 아니다. V1의 baseline은 StayOps가 dispatch를 만들고 **Kakao Share one-click**으로 Host가 기사 채팅방을 선택해 보내는 방식이다. 기사 응답은 항상 signed Driver Response Web으로 StayOps에 직접 돌아온다.
+**모든 외부 메시지는 WhatsApp 하나로 나간다. KakaoTalk은 사용하지 않는다.** V1 baseline은 Host가 지불을 확인하고 [배차 요청]을 누르면 StayOps가 대표기사에게 승인된 template을 자동 발송하는 방식이다. 기사 응답은 항상 signed 배차 응답 Web으로 StayOps에 직접 돌아온다. 상세는 `07_WhatsApp_배차_왕복_설계.md`.
+
+전송 수단이 막히는 경우를 대비해 `PartnerNotificationAdapter`에 `sms` / `manual` fallback을 둔다. 세 경로 모두 같은 signed URL을 보내므로 도메인은 바뀌지 않는다.
 
 ---
 
 ## 1. 최종 Plan-Critic 발견 사항과 수정
+
+> **2026-09-04 개편 주석**
+> 아래 Major A~K는 카카오 전제 시점의 검수 이력이다. 결론 대부분은 그대로 유효하지만 두 항목은 이후 결정으로 대체됐다.
+> - **Major B (VAT):** **결론이 뒤집혔다.** Guest가 금액을 아예 보지 않게 되면서 "손님이 보던 금액이 10% 올라 보인다"는 위험이 사라졌다. V1은 세금을 계산하며 Host와 대표기사에게 세금포함 총액을 보여준다. 요금표 단일 기준은 `08_요금표.md`다. 아래 Major B 본문 참조.
+> - **Major E (payment):** `payment_type` / `guest_due_krw` / `host_due_krw` 모델은 **폐기**됐다. 지불이 서비스 바깥에서 이뤄지므로 V1은 `payment_confirmed` 플래그 하나만 기록한다. 아래 Major E 본문 참조.
 
 ### Major A — Transfer 상태와 메시지 상태가 다시 중복됨
 
@@ -35,15 +45,23 @@ Kakao 자동발송은 V1 release blocker가 아니다. V1의 baseline은 StayOps
 
 최초 HTML은 route fare + option을 최종 표시 금액으로 사용한다. 이후 `MVP_SPEC.md`에서 근거가 확정되지 않은 상태로 `tax = supply * 10%`를 추가했다. 그대로 구현하면 Guest가 보던 금액이 10% 상승할 수 있다.
 
-**수정:** V1의 Guest-facing authoritative fare는 **현재 검증된 fare table + option 합계**로 고정한다.
+**최초 수정(뒤집힘):** V1 Guest-facing fare를 fare table + option 합계로 고정하고 세금을 추가하지 않는다.
+
+**현재 결정(2026-09-04):** 이 우려의 전제는 "Guest가 보던 금액이 10% 올라 보인다"였다. **Guest가 금액을 아예 보지 않게 되면서 전제가 사라졌다.**
+
+따라서 세금 계산을 복원한다.
 
 ```text
-base_fare_krw
-+ option_fare_krw
-= total_fare_krw
+공급가 = base_fare_krw + option_fare_krw
+세금   = ROUND(공급가 × 0.1)
+총액   = 공급가 + 세금
 ```
 
-V1에서는 세금을 암묵적으로 10% 추가하지 않는다. 세무/정산용 tax breakdown은 실제 회계 정책이 확정된 뒤 Post-V1에서 별도 필드로 추가할 수 있으나 `total_fare_krw`를 소급 변경하지 않는다.
+- `08_요금표.md`의 표기 금액은 **세금 별도 공급가**다.
+- **Guest에게는 어떤 금액도 표시하지 않는다.** 폼·접수 확인·배차 안내 어디에도 없고, 계산 결과를 클라이언트 응답에 담지도 않는다.
+- Host 화면과 대표기사 배차 요청 메시지에는 **세금포함 총액**을 표시한다.
+
+이 구조는 실제 운영 장부의 `공급가 / 세금(10%) / 세금포함 총액`과 일치한다. 첫 검토에서 발견됐던 "문서는 세금 없음, 장부는 10% 청구" 불일치가 이로써 해소된다.
 
 ### Major C — 일정 변경 뒤 오래된 기사 링크가 수락될 수 있음
 
@@ -85,23 +103,27 @@ assigned
 
 ### Major E — payment의 `guest_paid`가 지불 예정액인지 실제 지불액인지 모호함
 
-**수정:** V1 dispatch용 payment instruction은 아래로 명확히 분리한다.
+**최초 수정(폐기됨):** `payment_type = pending | host | guest | split` + `guest_due_krw` / `host_due_krw` 분담 모델.
+
+**현재 결정(2026-09-04):** 위 모델을 **전부 폐기한다.**
+
+지불은 이 서비스 바깥에서 이뤄진다. StayOps는 금액을 정산하지 않고 수금·입금을 관리하지 않는다. V1이 기록하는 것은 Host가 확인했다는 사실 하나뿐이다.
 
 ```text
-payment_type = pending | host | guest | split
-guest_due_krw
-host_due_krw
+payment_confirmed            boolean
+payment_confirmed_by
+payment_confirmed_at
 ```
 
 불변조건:
 
 ```text
-guest_due_krw + host_due_krw = total_fare_krw
+payment_confirmed = false 이면 배차 요청을 발송하지 않는다.
 ```
 
-`payment_type = pending`이면 dispatch를 시작할 수 없다.
+Host가 이 확인을 하고 [배차 요청]을 누르는 것이 정상 건에서 Host의 유일한 조작이다.
 
-실제 입금/수금 완료 여부는 Post-V1 settlement 영역이다.
+실제 입금/수금/분담 정산은 Post-V1 settlement 영역이다. 그때를 위해 fare snapshot은 V1부터 보존한다.
 
 ### Major F — 공항 터미널 정보가 기사 운행에 충분히 구조화되지 않음
 
@@ -180,7 +202,9 @@ pending
 -> accepted | rejected | expired | cancelled
 ```
 
-Kakao Share fallback에서는 Host가 실제 share action을 실행한 뒤 `awaiting_response`로 전환한다.
+`pending -> awaiting_response`의 트리거는 **대표기사 Notification의 발송 성공(sent)**이다. Host의 추가 조작이 필요 없다.
+
+`notification_channel = manual`인 경우에만 Host의 "전달 완료" 확인으로 전환한다.
 
 ### 2.3 DriverAssignment
 
@@ -217,11 +241,10 @@ TransferRequest가 `awaiting_driver`로 전환되려면 모두 만족해야 한�
 required guest contact valid
 required schedule valid
 active stay/address valid
-route valid
+route valid (fare rule 존재)
 passenger_count 1..7
 fare snapshot exists
-payment_type != pending
-payment amounts reconcile
+payment_confirmed = true
 child seat info complete when requested
 request not cancelled
 ```
@@ -256,14 +279,17 @@ service_time               required
 flight_no                  required for airport pickup; optional otherwise
 passenger_count            required, 1..7
 large_luggage_count        required, >= 0
-port_code                  ICN | GMP | SEOULSTN
-terminal_code              conditional
+origin_code                ICN | GMP | SEOULSTN | ILSAN | EVERLAND | STAY
+destination_code           STAY | ICN | GMP | SEOULSTN | ILSAN | EVERLAND
+terminal_code              conditional (공항일 때만)
 stay_code                  required active stay
 child_seat_count           0..4
 child_seat_notes           required when child_seat_count > 0
-terminal_transfer          boolean, not allowed for SEOULSTN
+terminal_transfer          boolean, 공항에서만 허용
 special_request            optional, max 1000
 ```
+
+거점 코드와 유효 노선 조합, 미확정 항목은 `08_요금표.md`를 따른다. 요금 규칙이 없는 조합은 신청을 받지 않는다.
 
 시간의 업무 기준 timezone은 `Asia/Seoul`이다. 원래 입력한 local date/time을 보존한다.
 
@@ -281,29 +307,31 @@ V1 자동 template은 지원된 언어가 있으면 사용하고, 없으면 Engl
 currency = KRW
 base_fare_krw
 option_fare_krw
-total_fare_krw
+supply_amount_krw       base + option
+tax_amount_krw          ROUND(supply × 0.1)
+total_amount_krw        supply + tax
 fare_rule_version / source
 calculated_at
 ```
 
-- client estimate는 권위값이 아니다.
+- **Guest 응답에 금액을 담지 않는다.** 손님 브라우저는 요금을 계산하지도 받지도 않는다.
 - server가 fare rule을 조회한다.
-- rule이 없으면 0원으로 진행하지 않고 validation/config error.
+- **요금표에 없는 조합은 0원으로 진행하지 않고 validation error.**
+- 인원 1~7을 벗어나면 상위 구간을 적용하지 않고 거부한다.
 - 과거 request의 snapshot은 fare rule 변경으로 재계산하지 않는다.
-- V1에서 근거 없이 VAT 10%를 추가하지 않는다.
+- fare rule은 방향(`pickup`/`dropoff`)까지 명시해 저장한다. "방향이 없으면 같은 값" 같은 암묵 규칙을 코드에 두지 않는다.
 
-### Payment instruction
+### 지불 확인
 
 ```text
-payment_type
-payment_instruction_status = pending | confirmed
-guest_due_krw
-host_due_krw
-confirmed_by
-confirmed_at
+payment_confirmed            boolean
+payment_confirmed_by
+payment_confirmed_at
 ```
 
-Driver message는 confirmed payment instruction만 사용한다.
+지불 자체는 서비스 바깥에서 이뤄진다. StayOps는 Host가 확인했다는 사실만 기록하고, 확인 전에는 배차 요청을 발송하지 않는다.
+
+**요금은 대표기사에게 보내는 배차 요청 메시지에 넣지 않는다.**
 
 ---
 
@@ -416,11 +444,13 @@ Supabase를 선택하면 Cron/Edge Function 조합으로 worker를 실행할 수
 Vite
 React
 TypeScript
-existing pickup UI/CSS 재사용
+디자인 기준: 09_UI_테마.md (ems 데모 디자인 시스템)
 Cloudflare Pages 배포
 ```
 
-V1에서 UI framework/component library는 추가하지 않는다.
+V1에서 UI framework/component library는 추가하지 않는다. `09_UI_테마.md`의 CSS 변수와 컴포넌트 값을 그대로 쓰면 충분하다.
+
+세 화면(손님 신청 폼 / 배차 응답 Web / Host 운영 화면)이 같은 스타일시트를 공유한다.
 
 ### Backend
 
@@ -465,8 +495,8 @@ supabase/
   functions/
     _shared/
     create-transfer-request/
-    create-driver-dispatch/
-    respond-driver-dispatch/
+    create-dispatch/
+    respond-dispatch/
     whatsapp-webhook/
     process-notifications/
 
@@ -475,7 +505,9 @@ public/
 기술적기획/
 ```
 
-`pickup_2.html`은 UI reference로 남기고, 구현 후 즉시 삭제하지 않는다.
+`src/app/driver/`는 대표기사용 배차 응답 화면이다.
+
+`pickup_2.html`은 입력 항목과 문구의 reference로 남긴다. **시각 디자인의 기준은 `09_UI_테마.md`이며 `pickup_2.html`이 아니다.** 구현 후에도 즉시 삭제하지 않는다.
 
 ---
 
@@ -498,10 +530,11 @@ cancel_transfer(...)
 2. expiry/revocation 확인
 3. request status + revision 확인
 4. active assignment 없음 확인
-5. DriverAssignment 생성
+5. DriverAssignment 생성 (기사 전화번호 E.164, 차량번호)
 6. DriverDispatch accepted
 7. TransferRequest assigned
-8. Guest assignment Notification outbox 생성
+8. Guest 배차 안내 Notification outbox 생성
+9. Host 배차 완료 알림 Notification outbox 생성
 
 을 완료한다.
 
@@ -511,13 +544,16 @@ cancel_transfer(...)
 
 ### Fare / validation
 
-- 모든 현재 route/direction/passenger tier
-- child-seat/terminal-transfer option
+- `08_요금표.md`의 모든 확정 노선 / passenger tier
+- child-seat / terminal-transfer option
 - passenger 0 / 8 거부
-- SEOULSTN terminal transfer 거부
+- 공항이 아닌 거점에서 terminal transfer 거부
+- **요금표에 없는 노선 조합 거부** (0원으로 진행하지 않음)
 - inactive/unknown stay 거부
-- missing fare rule은 error
-- VAT 10%가 암묵적으로 추가되지 않음
+- missing fare rule은 error (일산↔홍대, 에버랜드↔홍대 포함)
+- 세금 = ROUND(공급가 × 0.1), 총액 = 공급가 + 세금
+- 인천공항은 방향별 금액이 다르고, 나머지 거점은 양방향 동일
+- **Guest 응답 payload에 금액 필드가 없음**
 
 ### Request identity
 
@@ -530,10 +566,12 @@ cancel_transfer(...)
 - reject
 - expired token
 - revoked token
-- duplicate accept
-- two drivers simultaneous accept
+- duplicate accept (멱등 — 최초 결과 반환)
+- 동시 중복 제출에도 active assignment 하나
 - request cancelled before accept
 - request revision changed before accept
+- payment_confirmed = false 상태에서 dispatch 생성 거부
+- 기사 전화번호가 E.164로 정규화되어 저장됨
 
 ### Change/cancel
 
@@ -550,6 +588,9 @@ cancel_transfer(...)
 - failed notification retry
 - dedupe prevents duplicate logical Guest message
 - inbound Guest message with ambiguous active request remains unassociated
+- inbound 역할 라우팅: 대표기사 번호는 partner, 손님 번호는 guest, 미등록 번호는 unknown
+- 대표기사 자유 텍스트는 파싱되지 않고 링크 재안내 1회만 발생
+- 24시간 창이 닫힌 상태에서 자유 텍스트 발송을 시도하지 않음
 
 ### Security
 
@@ -575,9 +616,11 @@ V1에서 capacity rule은 **warning only**다. 명확한 차량별 capacity data
 - passenger_count >= 7
 - large_luggage_count >= 5
 
-### Driver
+### DispatchPartner
 
-V1의 실제 기사 목록은 seed/config로 관리해도 된다. 범용 Driver management UI는 필요 없다.
+V1의 대표기사는 **한 명**이며 seed/config로 관리한다. 기사 관리 UI는 필요 없다.
+
+개별 운행 기사는 저장된 주체가 아니다. 대표기사가 배차 응답에 입력한 전화번호·차량번호가 해당 건의 기사 정보다.
 
 ---
 
@@ -587,15 +630,18 @@ V1의 실제 기사 목록은 seed/config로 관리해도 된다. 범용 Driver 
 
 - [ ] WhatsApp 실제 번호 inbound/outbound 확인
 - [ ] Host manual reply 운영 방식 확인
-- [ ] 필요한 WhatsApp template 승인/발송 확인
+- [ ] Guest template 승인/발송 확인
+- [ ] 대표기사 배차 요청 template 승인/발송 확인
+- [ ] 대표기사 단말에서 URL 버튼 -> signed 배차 응답 Web 오픈 확인
+- [ ] 대표기사 연락처 확보 / WhatsApp 사용 가능 여부 확인
+- [ ] 대표기사 opt-in 증거 확보
+- [ ] Guest/Partner inbound 역할 라우팅 검증
 - [ ] opt-in 문구와 privacy notice 준비
 - [ ] production secret 분리
 - [ ] production DB backup 정책 확인
 - [ ] 실제 Stay address 확인; WSR는 미확정이면 inactive
-- [ ] fare table의 실제 청구 금액 확인
-- [ ] 실제 Driver 연락처/기사 메시지 확인
-- [ ] Kakao Share 링크/버튼을 기사 휴대폰에서 E2E 확인
-- [ ] Guest/Driver/Host 실제 휴대폰 3자 왕복 테스트
+- [ ] `08_요금표.md` 미확정 항목 확정
+- [ ] Guest/대표기사/Host 실제 휴대폰 3자 왕복 테스트
 
 ---
 
@@ -613,13 +659,13 @@ V1의 실제 기사 목록은 seed/config로 관리해도 된다. 범용 Driver 
 7. Guest Form wiring
 8. fake/test Notification adapter
 9. DriverDispatch + signed response transaction
-10. 실제 WhatsApp/Kakao adapter 연결
-11. exception admin
+10. 실제 WhatsApp adapter 연결 (Guest / 대표기사 / Host)
+11. Host 운영 화면
 12. real-device E2E
 13. internal pilot
 ```
 
-중요: WhatsApp Coexistence가 확인되기 전에도 2~9는 구현 가능하지만, **실손님 Pilot은 시작하지 않는다.**
+중요: WhatsApp Coexistence와 template 승인이 확인되기 전에도 2~9는 구현 가능하지만, **실손님 Pilot은 시작하지 않는다.**
 
 ---
 
@@ -630,9 +676,10 @@ V1의 실제 기사 목록은 seed/config로 관리해도 된다. 범용 Driver 
 - 실제 WhatsApp provider/onboarding path
 - Coexistence/message echo 지원 수준
 - WhatsApp template 이름/승인 상태
-- Kakao 완전자동 outbound 여부
-- driver response timeout 값
+- 한 template에 quick-reply 버튼 + URL 버튼 조합 가능 여부 (24시간 창 확보용)
+- Guest용/Partner용 번호 분리 여부 (V1은 단일 번호)
+- 배차 응답 timeout 값 (초기 후보 60분)
 - 개인정보 보존기간의 최종 정책
-- guest에게 driver phone을 노출하는 정확한 시점
+- `08_요금표.md` §5의 미확정 항목
 
 이 항목은 Phase 0 또는 Pilot 전 gate에서 확정한다.

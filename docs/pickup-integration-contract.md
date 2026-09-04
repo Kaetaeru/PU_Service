@@ -1,5 +1,11 @@
 # Pickup Service Integration Contract
 
+> **Superseded as an architecture document.** The intake boundary is now implemented as Supabase Edge Functions, not a standalone `PU_Service` HTTP API. Current contracts live in `기술적기획/00_CANONICAL_SYSTEM.md`, `기술적기획/06_IMPLEMENTATION_READINESS.md`, `기술적기획/07_WhatsApp_배차_왕복_설계.md` and `기술적기획/08_요금표.md`.
+>
+> The fare rules quoted below are replaced by `기술적기획/08_요금표.md`. KakaoTalk is not used at all.
+>
+> Still valid: the HTML-behaviour findings, the server-authority argument, idempotency semantics, the public-browser security boundary, and the provider-adapter separation.
+
 ## Status
 
 TASK-001 integration discovery updated from the user-provided `TalkFile_pickup.html` and the technical planning documents under `기술적기획/`.

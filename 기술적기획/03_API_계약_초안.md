@@ -1,6 +1,8 @@
 # 03. HTML ↔ PU_Service API 계약 초안
 
-> 상태: 기술 기획 초안. 실제 구현 전 확정 필요.
+> **이전 근거 문서.** 독립 HTTP API를 전제로 한 초안이다. 현재 구현 계약은 `06_IMPLEMENTATION_READINESS.md`, 입력 항목은 `00_CANONICAL_SYSTEM.md` §5, 요금은 `08_요금표.md`가 우선한다.
+> 이 문서의 `port_code` + `direction` 조합은 `origin_code` / `destination_code` 쌍으로 대체됐고, 손님 연락처·언어·opt-in·수하물·터미널 필드가 이후 추가됐다.
+> idempotency 규칙과 오류 응답 계약은 여전히 유효하다.
 
 ## 1. Create transfer request
 

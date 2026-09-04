@@ -1,5 +1,10 @@
 # 02. PU_Service 연결 설계
 
+> **이전 근거 문서.** 독립 `PU_Service` HTTP API를 전제로 쓰였으나, 현재 구현 계약은 Supabase Edge Functions 기반이다. `06_IMPLEMENTATION_READINESS.md`가 우선한다.
+> validation·server fare 권위·idempotency·public browser 보안 경계에 관한 논지는 여전히 유효하며 현재 문서들에 승계됐다.
+
+---
+
 ## 1. 목표
 
 기존 `TalkFile_pickup.html`의 UI/UX를 유지하면서 `Request this transfer`를 실제 서버 예약 접수로 전환한다.

@@ -7,7 +7,7 @@
 
 1. 정상 플로우에서 호스트의 복사/재전달/재입력을 제거한다.
 2. 첫 성공 기준은 "폼이 예쁘다"가 아니라 **Guest -> StayOps -> Driver -> StayOps -> Guest 왕복이 실제로 끝난다**다.
-3. WhatsApp/Kakao 공급자 제약은 adapter 뒤에 둔다.
+3. WhatsApp 공급자 제약은 adapter 뒤에 둔다. 전송 수단이 막혀도 도메인은 멈추지 않는다.
 4. 멀티호스트는 나중에 판매하지만 `host_id`/tenant isolation은 처음부터 넣는다.
 5. AI 자동 자유대화, 청소/세탁/iCal은 첫 왕복이 안정화되기 전에는 구현하지 않는다.
 6. 각 단계는 다음 단계가 의존하는 위험을 먼저 제거한다.
@@ -32,12 +32,16 @@
 - provider message id 기반 dedup 확인
 - business-initiated template 발송 경로 확인
 
-### Kakao
+### 대표기사 (WhatsApp)
 
-- 기사에게 선제적으로 보낼 실제 메시지 경로 결정
-- 버튼/URL 포함 가능 여부 확인
-- signed Driver Response URL이 기사 휴대폰에서 정상 열리는지 확인
-- 자동 Kakao가 즉시 불가능하면 MVP fallback을 "한 번의 원클릭 share"로 명시하되 도메인/DB 흐름은 동일하게 유지
+- 대표기사 연락처 확보
+- **대표기사가 WhatsApp을 쓸 수 있는지 확인** — 이 전제가 무너지면 즉시 SMS 어댑터로 전환
+- 대표기사 opt-in 증거 확보
+- 배차 요청 template 생성/승인
+- 승인된 template을 대표기사 실단말로 발송
+- URL 버튼 -> signed 배차 응답 Web이 실단말에서 정상 열리는지 확인
+- 한 template에 quick-reply 버튼 + URL 버튼 조합 가능 여부 확인 (24시간 창 확보용)
+- 같은 번호에서 Guest/Partner inbound 역할 라우팅 확인
 
 ### Backend
 
@@ -48,8 +52,13 @@
 
 - WhatsApp의 실제 inbound/outbound 경로가 동작한다.
 - 호스트 수동 WhatsApp 운영과 API 자동화를 함께 쓸 수 있는 연결 모드가 확인되거나 명시적인 fallback이 선택된다.
-- 기사 알림 전달 경로가 하나 선택된다.
+- 대표기사에게 배차 요청이 실제로 도달하고 응답 링크가 열린다.
+- Guest와 대표기사의 inbound가 역할로 구분된다.
 - 이후 개발이 특정 공급자 미확정 때문에 다시 설계되지 않는다.
+
+## 실패 시 대비
+
+대표기사가 WhatsApp을 쓸 수 없거나 template 승인이 지연되면 `PartnerNotificationAdapter`를 `sms` 또는 `manual`로 전환한다. 세 경로 모두 같은 signed URL을 보내므로 Phase 1~4 구현은 그대로 진행할 수 있다.
 
 ## 실패 시
 
@@ -70,10 +79,11 @@
 - `hosts`
 - `stays`
 - `transfer_requests`
-- `drivers`
+- `dispatch_partners`
 - `driver_dispatches`
 - `driver_assignments`
 - `notifications/message_events`
+- `wa_contacts`
 - `fare_rules`
 - idempotency 저장
 - audit timestamps/events
@@ -96,17 +106,21 @@ transitionTransferStatus()
 
 ## 요금
 
-기존 HTML 요금표를 초기 seed로 옮기고 server authoritative calculation을 만든다.
+`08_요금표.md` §2의 16개 조합을 방향까지 명시해 seed하고 server authoritative calculation을 만든다.
 
 예약 시:
 
 ```text
-fare rule lookup
--> fare 계산
+fare rule lookup (origin · area · direction · pax)
+-> 공급가 = 기본 + 옵션
+-> 세금 = ROUND(공급가 × 0.1)
+-> 총액 = 공급가 + 세금
 -> fare_snapshot 저장
 ```
 
-과거 요청은 이후 요금표 수정으로 변경되지 않는다.
+- 요금표에 없는 조합은 0원이 아니라 error다.
+- 과거 요청은 이후 요금표 수정으로 변경되지 않는다.
+- **계산 결과를 Guest 응답에 담지 않는다.** 요금은 Host와 대표기사에게만 쓰인다.
 
 ## 완료조건
 
@@ -145,9 +159,11 @@ fare rule lookup
 
 ### Route
 
-- ICN / GMP / Seoul Station
-- Accommodation
-- terminal/meeting point when applicable
+- 인천공항 / 김포공항 / 서울역 / 일산 / 용인 에버랜드
+- Accommodation (이태원 5곳 · 홍대 1곳)
+- terminal/meeting point — 공항일 때만
+- **금액을 표시하지 않는다.** 손님은 행선지와 옵션만 고른다
+- 요금표에 없는 조합(일산↔홍대, 에버랜드↔홍대)은 선택 불가
 
 ### Options
 
@@ -176,7 +192,8 @@ Guest form
 - 실제 휴대폰에서 Guest form 제출 가능
 - request id 생성
 - DB 저장
-- 서버 요금 일치
+- 서버가 공급가·세금·총액을 계산해 snapshot 저장
+- **Guest 화면과 응답 어디에도 금액이 없음**
 - WhatsApp 연락처 E.164 정규화
 - opt-in evidence 저장
 - receipt notification 결과 추적
@@ -191,41 +208,49 @@ Guest form
 
 ## DriverDispatch
 
-Host/운영 규칙이 특정 기사에게 dispatch를 만든다.
+Host가 지불을 확인하고 [배차 요청]을 누르면 dispatch가 만들어지고 대표기사에게 자동 발송된다.
 
 ```text
-TransferRequest
+TransferRequest (payment_confirmed = true)
 -> DriverDispatch
--> DriverNotificationAdapter
+-> PartnerNotificationAdapter (whatsapp)
+-> 발송 성공 시 awaiting_response
 ```
 
-## 기사 메시지
+Host가 채팅방을 고르거나 메시지를 작성하지 않는다.
 
-포함 정보:
+## 배차 요청 메시지
+
+승인된 WhatsApp template. **요약은 메시지에, 상세는 링크 뒤에** 둔다.
+
+메시지에 넣는 것:
 
 - 일시
 - pickup/dropoff
-- guest display name
-- passenger/luggage
-- flight
-- route
-- add-ons
-- signed response button/link
+- 노선 (거점 · 터미널 · 숙소)
+- 인원/수하물
+- 카시트 필요 여부
+- **요금 (세금포함 총액 + 항목 분해)**
+- signed response 버튼
 
-민감정보는 운영상 필요한 최소 범위만 노출한다.
+메시지에 넣지 않는 것:
 
-## Driver Response Web
+- 손님 전화번호
+- 손님 전체 이름
+- 항공편·특이사항 등 상세 (링크 뒤 페이지에 표시)
 
-로그인 없는 token 기반 모바일 페이지.
+## 배차 응답 Web
+
+로그인 없는 token 기반 모바일 페이지. 상단에 운행 상세를 읽기 전용으로 보여주고, 입력은 세 가지뿐이다.
 
 ```text
-Accept / Reject
-ETA
-Vehicle plate
-Driver name
-Driver phone
-Model/color optional
+배차 가능 / 불가
+기사 전화번호      국가번호 포함 E.164 정규화
+차량번호
+차량 종류/색상 optional
 ```
+
+ETA는 V1 필수가 아니다.
 
 ## 확정 transaction
 
@@ -239,17 +264,19 @@ validate token + dispatch
 -> mark transfer assigned
 ```
 
-## 재배차
+## 배차 불가 / 무응답
 
-- reject -> 새 dispatch 가능
-- timeout -> expired -> 새 dispatch 가능
-- 동시 중복 assignment는 DB constraint/transaction으로 차단
+- 배차 불가 -> Host에게 알림. V1에서 자동 재발송하지 않는다
+- timeout -> expired -> Host에게 알림
+- 중복 제출과 동시 assignment는 DB constraint/transaction으로 차단
 
 ## 완료조건
 
-- 기사 휴대폰에서 링크로 수락/거절 가능
-- 차량번호/ETA가 자동으로 request와 연결
+- 대표기사 휴대폰에서 링크로 배차 가능/불가 회신 가능
+- 기사 전화번호와 차량번호가 자동으로 request와 연결
+- 전화번호가 E.164로 정규화되어 저장
 - 중복/만료 token 거부
+- payment_confirmed = false 상태에서 dispatch 생성 거부
 - 하나의 request에 assignment 하나만 확정
 
 ---
@@ -271,11 +298,13 @@ validate token + dispatch
 메시지 최소 정보:
 
 - booking/reference
-- driver name
-- vehicle plate
-- ETA
+- 차량번호
+- 기사 전화번호 (국가번호 포함)
+- 일시
+- 노선
 - meeting point
-- driver contact if policy allows
+
+동시에 Host에게도 배차 완료 알림을 보낸다.
 
 ## Incoming guest messages
 
@@ -457,7 +486,7 @@ Sign up
 # 권장 실제 착수 순서
 
 ```text
-0. WhatsApp/Kakao feasibility
+0. WhatsApp feasibility (Guest + 대표기사)
 1. DB + fare + tenant foundation
 2. Guest form + WhatsApp receipt
 3. Driver dispatch + signed response

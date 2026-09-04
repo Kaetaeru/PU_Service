@@ -3,7 +3,10 @@
 > 상태 기록일: 2026-09-04
 > 목적: V1 Phase 0의 실제 외부 연동 검증 증거와 아직 하지 않은 작업을 분리해서 기록한다.
 > 상위 구현 계약: `06_IMPLEMENTATION_READINESS.md`
+> 배차 설계: `07_WhatsApp_배차_왕복_설계.md`
 > 개발 순서: `05_DEVELOPMENT_PLAN.md`
+>
+> **2026-09-04 개편:** 배차 채널이 KakaoTalk에서 WhatsApp으로 바뀌었고, 연락 상대가 개별 기사에서 운송회사 대표기사 한 명으로 좁혀졌다. §1의 PASS 항목은 채널 변경과 무관하게 그대로 유효하다 (Guest 다리와 배차 다리가 같은 WhatsApp 인프라를 쓰기 때문). §2에 배차 관련 신규 검증 항목이 추가됐다.
 
 ---
 
@@ -179,22 +182,30 @@ whatsapp_opt_in_policy_version
 
 의 실제 사용자 문구와 개인정보 안내를 production pilot 전에 확정해야 한다.
 
-### 2.4 Kakao Share real-device round trip
+### 2.4 대표기사 배차 왕복
 
 **Status: NOT STARTED**
 
-V1 baseline은 automatic Kakao outbound가 아니라 one-click Kakao Share다.
+2026-09-04 개편으로 배차 채널이 KakaoTalk에서 WhatsApp으로 바뀌었다. 연락 상대는 개별 기사가 아니라 **운송회사 대표기사 한 명**이다. 상세는 `07_WhatsApp_배차_왕복_설계.md`.
 
-실제 Host 단말에서:
+검증해야 할 것:
 
 ```text
-StayOps-generated dispatch
--> Kakao Share
--> intended Driver chat 선택
--> signed Driver Response URL open
+대표기사 연락처 확보
+대표기사가 WhatsApp을 쓸 수 있는지 확인      ← 전제가 무너지면 SMS 어댑터로 전환
+대표기사 opt-in 증거 확보
+배차 요청 template 생성/승인
+승인된 template을 대표기사 실단말로 발송
+URL 버튼 -> signed 배차 응답 Web 오픈
+가능/불가 + 기사 전화번호 + 차량번호 회신
+같은 번호에서 Guest/Partner inbound 역할 라우팅
 ```
 
-을 검증해야 한다.
+추가 확인 항목: 하나의 template에 quick-reply 버튼과 URL 버튼을 함께 넣을 수 있는지. 가능하면 24시간 자유 텍스트 창을 확보할 수 있어 운영 유연성이 올라간다. **V1 baseline은 URL 버튼 단독**으로 잡는다.
+
+### 2.6 카카오 관련 항목 폐기
+
+이전 Phase 0에 있던 `Kakao Share real-device round trip`은 폐기됐다. KakaoTalk은 사용하지 않는다.
 
 ### 2.5 Production logging hardening
 
@@ -240,9 +251,17 @@ Guest 이름, 전화번호/wa_id, 실제 message body 등은 일반 function log
 [TODO] actual-number Guest inbound webhook
 [TODO] Host manual Business App reply while API remains connected
 [TODO] sent-message echo if supported by selected Coexistence path
-[TODO] business-initiated production template send
+[TODO] Guest production template send
 [TODO] Guest opt-in/privacy copy
-[TODO] Kakao Share real-device Driver link test
+
+[TODO] 대표기사 연락처 확보
+[TODO] 대표기사 WhatsApp 사용 가능 여부 확인
+[TODO] 대표기사 opt-in 증거 확보
+[TODO] 배차 요청 template 승인
+[TODO] 대표기사 실단말 수신 + URL 버튼 -> 배차 응답 Web 오픈
+[TODO] quick-reply + URL 버튼 조합 가능 여부 확인
+[TODO] Guest/Partner inbound 역할 라우팅 검증
+[TODO] Host 운영 알림 발송 경로 확인
 ```
 
 ---
@@ -279,4 +298,14 @@ real Business number remains operational
 + no production PII raw logging
 ```
 
-Kakao는 one-click Share real-device 검증까지 끝나면 V1 baseline external feasibility를 충족한다.
+배차 부분은 아래가 검증되면 V1 baseline external feasibility를 충족한다.
+
+```text
+대표기사 template 승인
++ 대표기사 실단말 수신
++ URL 버튼 -> signed 배차 응답 Web 오픈
++ 가능/불가 + 기사 전화번호 + 차량번호 회신
++ Guest/Partner inbound 역할 분리
+```
+
+대표기사가 WhatsApp을 쓸 수 없으면 `PartnerNotificationAdapter`를 `sms`로 전환한다. 같은 signed URL을 보내므로 도메인 구현은 영향받지 않는다.

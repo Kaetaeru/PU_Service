@@ -8,13 +8,36 @@ Human-facing projection only. Do not use this file as reconciliation source of t
 - Control status: `complete`
 - Current control task: `TASK-001 — complete`
 - Implementation started: no
+- Last plan revision: 2026-09-04 — WhatsApp only, lead-driver dispatch
 
 ## Canonical planning
 
 - `기술적기획/00_CANONICAL_SYSTEM.md`
 - `기술적기획/V1_INTERNAL_MVP.md`
 - `기술적기획/06_IMPLEMENTATION_READINESS.md`
+- `기술적기획/07_WhatsApp_배차_왕복_설계.md`
+- `기술적기획/08_요금표.md`
+- `기술적기획/09_UI_테마.md`
 - `기술적기획/05_DEVELOPMENT_PLAN.md`
+
+## 2026-09-04 direction change
+
+```text
+Messaging   WhatsApp only. KakaoTalk removed entirely.
+Dispatch    One DispatchPartner (transport company lead driver).
+            No driver master, no fan-out, no automatic redispatch.
+Send        Automatic on Host's single click. Send success drives awaiting_response.
+Payment     Out of scope. Only payment_confirmed gates dispatch.
+Response    available/unavailable + driver phone (E.164) + vehicle plate.
+Host        Observer with WhatsApp alerts, not an approver of message content.
+Fare        08_요금표.md is the single source, all 16 combinations enumerated.
+            Listed amounts are tax-exclusive; tax = ROUND(supply x 0.1).
+            Guests never see any amount. Host and DispatchPartner see the total.
+            Ruleless routes are rejected, never priced at 0.
+Origins     ICN, GMP, SEOULSTN, ILSAN, EVERLAND — all selectable by the Guest.
+Tours       Excluded from V1.
+UI          09_UI_테마.md, derived from existing ems-* demos.
+```
 
 ## Current Phase 0 execution evidence
 
@@ -35,10 +58,18 @@ As of 2026-09-04:
 [NOT STARTED] actual accommodation WhatsApp Business number Coexistence
 [TODO] actual-number API outbound/inbound
 [TODO] Host manual Business App reply while API remains connected
-[TODO] production operational template send
+[TODO] Guest production template send
 [TODO] Guest opt-in/privacy copy
-[TODO] Kakao Share real-device Driver link test
+
+[TODO] lead driver contact + WhatsApp usability confirmation
+[TODO] lead driver opt-in evidence
+[TODO] partner dispatch template approval
+[TODO] real-device receipt + URL button -> signed response Web
+[TODO] quick-reply + URL button combination feasibility
+[TODO] inbound role routing verification on the shared number
 ```
+
+The PASS rows are unaffected by the channel change: the Guest leg and the dispatch leg now share the same WhatsApp transport that was already validated.
 
 Important boundary:
 
@@ -50,33 +81,26 @@ Important boundary:
 
 - **Engineering-ready: YES**
 - **Phase 0 complete: NO**
-- **Real Guest pilot-ready: NO — actual WhatsApp Business number/Coexistence/template validation still required**
+- **Real Guest pilot-ready: NO**
 
-Final plan-critic pass resolved:
+## Open decisions
 
-- Transfer vs Notification state duplication;
-- unsupported V1 VAT 10% uplift;
-- stale Driver links/messages after request edits via request revision;
-- assignment reconfirmation/supersession;
-- ambiguous payment fields;
-- missing airport terminal / child-seat context;
-- ambiguous WhatsApp inbound association;
-- webhook duplicate/out-of-order handling;
-- stale notification send after change/cancel;
-- WSR missing-address production risk;
-- passenger >7 silent top-tier pricing;
-- public write/security boundary;
-- durable notification outbox/retry;
-- concrete V1 stack and repository layout.
+One fare gap remains: `ILSAN ↔ HONGDAE` and `EVERLAND ↔ HONGDAE` have no price and are blocked in the Guest form until one is supplied. Everything else in `08_요금표.md` §2 is confirmed.
 
-V1 stack:
+## Largest current risks
+
+1. Removing Kakao puts Meta template approval on the critical path for the dispatch leg as well as the guest leg. Mitigated by `sms` / `manual` adapter fallbacks that send the same signed URL.
+2. The lead driver may not use WhatsApp. This is a business check, not a technical one, and it is the first Phase-0 action on the dispatch side.
+
+## V1 stack
 
 ```text
 Frontend: Vite + React + TypeScript -> Cloudflare Pages
-Backend: Supabase Postgres/Auth/Edge Functions/RLS
-Messaging: WhatsApp adapter + Kakao Share baseline
+Backend:  Supabase Postgres/Auth/Edge Functions/RLS
+Messaging: WhatsApp Cloud API (single WABA number, role-routed inbound)
+Design:   09_UI_테마.md
 ```
 
-Next Phase 0 action: harden the test webhook logging, then validate the existing accommodation WhatsApp Business number through a Coexistence-safe onboarding path without deleting/disconnecting/migrating it to API-only mode.
+Next Phase 0 action: harden the test webhook logging, then validate the existing accommodation WhatsApp Business number through a Coexistence-safe onboarding path without deleting/disconnecting/migrating it to API-only mode. In parallel, confirm the lead driver's WhatsApp usability.
 
-Next implementation authorization may still create `work/v1-internal` and start TASK-003 backend foundation/provider-independent vertical slice in parallel. Actual WhatsApp Business number/Coexistence/template validation must finish before real Guest pilot.
+Next implementation authorization may still create `work/v1-internal` and start TASK-003 backend foundation/provider-independent vertical slice in parallel.

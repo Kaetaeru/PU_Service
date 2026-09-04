@@ -1,7 +1,7 @@
 # StayOps Canonical System
 
 > 상태: 현재 제품/기술 기획의 **최우선 Source of Truth**
-> 최종 정리: 2026-08-25
+> 최종 정리: 2026-09-04 (WhatsApp 단일 채널 · 대표기사 배차 구조로 개편)
 
 ## 0. 문서 우선순위
 
@@ -10,11 +10,23 @@
 1. `00_CANONICAL_SYSTEM.md` — 제품 동작과 불변조건
 2. `V1_INTERNAL_MVP.md` — 판매 전 내부 V1의 포함/제외 범위
 3. `06_IMPLEMENTATION_READINESS.md` — V1 구현 계약, 데이터/보안/테스트 세부 규칙
-4. `05_DEVELOPMENT_PLAN.md` — 구현 순서와 단계별 완료조건
-5. `REQUIREMENTS.md` — 전체 사업/운영 요구와 장기 아이디어
-6. `MVP_SPEC.md`, `01~04` — 이전 초안과 세부 설계 근거
+4. `07_WhatsApp_배차_왕복_설계.md` — 배차 왕복 상세 설계
+5. `08_요금표.md` — 요금에 관한 단일 기준
+6. `09_UI_테마.md` — 화면 디자인 기준
+7. `05_DEVELOPMENT_PLAN.md` — 구현 순서와 단계별 완료조건
+8. `REQUIREMENTS.md` — 전체 사업/운영 요구와 장기 아이디어
+9. `MVP_SPEC.md`, `01~04` — 이전 초안과 세부 설계 근거
 
-기존 문서의 Guest Kakao 반환, Host 차량정보 재입력, 단일 dispatch/message 상태, 암묵적 VAT 10% 추가 규칙은 이 문서와 `06_IMPLEMENTATION_READINESS.md`에 의해 대체된다.
+### 이 문서가 대체하는 이전 규칙
+
+- **KakaoTalk 관련 전부.** Kakao Share, 알림톡, 채널 챗봇, Kakao adapter는 사용하지 않는다. `04_카카오_기사배차_왕복_설계.md`는 `07_WhatsApp_배차_왕복_설계.md`로 대체됐다.
+- Host의 차량정보 재입력
+- Guest Kakao 반환
+- `waiting/assigned/notified` 단일 dispatch/message 상태
+- Guest에게 금액을 표시하던 규칙 전부 (요금 박스, 실시간 견적) — Guest는 금액을 보지 않는다
+- "V1은 세금을 계산하지 않는다"는 이전 결정 — Guest 노출이 사라졌으므로 세금 계산을 복원한다 (`08_요금표.md` §6.2)
+- `payment_type = pending|host|guest|split` 및 `guest_due_krw`/`host_due_krw` 분담 모델 (§6이 대체)
+- 개별 기사 마스터 관리와 복수 기사 fan-out
 
 ---
 
@@ -24,9 +36,9 @@ StayOps의 목적은 숙소 Host가 Guest와 Partner 사이에서 반복적으�
 
 핵심 불변조건:
 
-> 정상적인 업무에서는 Host가 Driver 메시지, Driver ETA/차량정보, Guest 배차안내를 복사·재작성·재입력하지 않는다. Host는 승인, 예외 판단, 복구, 수동 대화에 집중한다.
+> 정상적인 업무에서 Host는 기사 메시지, 기사 연락처·차량번호, Guest 배차안내를 복사·재작성·재입력하지 않는다. Host의 조작은 **지불 확인 후 [배차 요청] 클릭 1회**뿐이다.
 
-첫 제품은 공항/서울역 픽업·드랍오프다.
+첫 제품은 공항/역/거점과 숙소 사이의 픽업·드랍오프다.
 
 V1은 판매용 SaaS가 아니라 **우리가 실제 숙소 운영에 직접 쓰는 내부 운영 MVP**다. 정확한 범위는 `V1_INTERNAL_MVP.md`를 따른다.
 
@@ -34,14 +46,22 @@ V1은 판매용 SaaS가 아니라 **우리가 실제 숙소 운영에 직접 쓰
 
 ## 2. Actor와 채널
 
-| Actor | 기본 채널 | 역할 |
+| Actor | 채널 | 역할 |
 |---|---|---|
 | Guest | Guest Web + WhatsApp | 요청 입력, 운영 메시지 수신, Host와 자유 대화 |
-| Driver | KakaoTalk + signed Driver Web | 배차 요청 수신, 수락/거절, ETA·차량정보 입력 |
-| Host | StayOps Admin + WhatsApp Business App | 기사 선택/승인, 예외 복구, Guest 수동 답장 |
-| StayOps | Managed Backend | 예약·배차·메시지·payment 상태의 Source of Truth |
+| DispatchPartner (대표기사) | WhatsApp + signed 배차 응답 Web | 배차 요청 수신, 가능/불가 회신, 기사 연락처·차량번호 입력 |
+| Host | StayOps 운영 화면 + WhatsApp Business App + 개인 WhatsApp | 지불 확인, 배차 요청, 예외 복구, Guest 수동 답장, 상황 파악 |
+| StayOps | Managed Backend | 예약·배차·메시지 상태의 Source of Truth |
 
-WhatsApp과 KakaoTalk은 상태 저장소가 아니다. 업무 상태는 StayOps에 저장한다.
+**외부 메시지는 전부 WhatsApp 하나로 나간다.** KakaoTalk은 사용하지 않는다.
+
+WhatsApp은 상태 저장소가 아니다. 업무 상태는 StayOps에 저장한다.
+
+### 대표기사 구조
+
+기사 측 연락 상대는 개별 운행 기사가 아니라 **운송회사의 배차 담당자 한 명**이다. 대표기사가 회사 내부에서 실제 운행 기사를 배정하고, 그 결과를 StayOps에 입력한다.
+
+StayOps는 개별 운행 기사를 저장된 주체로 관리하지 않는다. 기사 마스터·기사 계정·기사 로그인은 없다.
 
 ---
 
@@ -50,15 +70,16 @@ WhatsApp과 KakaoTalk은 상태 저장소가 아니다. 업무 상태는 StayOps
 직접 VPS를 관리하지 않는다.
 
 ```text
-Guest Web -----------┐
-Driver Response Web -┼----> Frontend
-Host Admin ----------┘        |
-                              v
-                       Supabase Backend
-                  Postgres / Auth / Edge Functions
-                         |             |
-                         v             v
-                    WhatsApp      Kakao Share/Adapter
+Guest Web ------------┐
+배차 응답 Web ---------┼----> Frontend (Cloudflare Pages)
+Host 운영 화면 --------┘             |
+                                     v
+                            Supabase Backend
+                       Postgres / Auth / Edge Functions
+                                     |
+                                     v
+                            WhatsApp Cloud API
+                          (Guest · 대표기사 · Host)
 ```
 
 V1 구현 stack의 세부 결정은 `06_IMPLEMENTATION_READINESS.md`를 따른다.
@@ -102,19 +123,19 @@ whatsapp_opt_in_policy_version
 ### Direction
 
 ```text
-pickup  = AIRPORT/STATION -> STAY
-dropoff = STAY -> AIRPORT/STATION
+pickup  = 거점 -> STAY
+dropoff = STAY -> 거점
 ```
 
 ### Schedule
 
-업무 timezone은 `Asia/Seoul`이다. 원래 입력 local date/time을 보존한다.
+업무 timezone은 `Asia/Seoul`이다. 원래 입력한 local date/time을 보존한다.
 
 Pickup:
 
 - arrival date
 - scheduled landing time
-- airport pickup이면 flight number 필수
+- 공항 픽업이면 flight number 필수
 
 Drop-off:
 
@@ -127,18 +148,34 @@ Drop-off:
 ```text
 passenger_count       1..7
 large_luggage_count   >= 0
-port_code             ICN | GMP | SEOULSTN
+origin/destination    거점 코드 (아래)
 stay_code             active Stay
 terminal_code         conditional
 ```
+
+거점 코드:
+
+```text
+ICN        인천공항        공항
+GMP        김포공항        공항
+SEOULSTN   서울역
+ILSAN      일산
+EVERLAND   용인 에버랜드
+```
+
+다섯 거점 모두 손님이 신청 폼에서 고를 수 있다.
 
 terminal:
 
 - ICN: `T1 | T2 | UNKNOWN`
 - GMP: `DOMESTIC | INTERNATIONAL | UNKNOWN`
-- SEOULSTN: null
+- 그 외: null
 
-8명 이상은 가장 높은 요금을 자동 적용하지 않는다. V1 자동예약 범위 밖으로 처리한다.
+공항이 아닌 거점(`SEOULSTN` / `ILSAN` / `EVERLAND`)에서는 항공편·터미널·터미널경유 항목을 표시하지 않는다.
+
+8명 이상은 가장 높은 요금을 자동 적용하지 않는다. V1 자동예약 범위 밖으로 거부하고 Host 문의로 전환한다.
+
+거점·노선의 유효 조합은 `08_요금표.md` §2를 따른다. **요금 규칙이 없는 조합은 신청을 받지 않는다.** 현재 `일산 ↔ 홍대`, `에버랜드 ↔ 홍대`가 여기에 해당하며 폼에서 선택할 수 없게 막는다.
 
 ### Add-ons
 
@@ -149,7 +186,7 @@ terminal_transfer     boolean
 special_request       optional
 ```
 
-서울역에서는 terminal transfer를 허용하지 않는다.
+터미널 경유는 공항(`ICN`/`GMP`)에서만 허용한다.
 
 ### Location
 
@@ -157,73 +194,83 @@ special_request       optional
 
 ---
 
-## 6. Fare / Payment 불변조건
+## 6. Fare / 지불 불변조건
 
 ### Fare
 
-V1의 Guest-facing authoritative fare는 최초 HTML에서 검증된 정책을 보존한다.
+요금 규칙은 `08_요금표.md`가 단일 기준이다.
 
 ```text
-base_fare_krw
-+ option_fare_krw
-= total_fare_krw
+공급가 = base_fare_krw + option_fare_krw
+세금   = ROUND(공급가 × 0.1)
+총액   = 공급가 + 세금
 currency = KRW
 ```
 
-- browser price는 estimate다.
+**요금은 Host와 대표기사에게만 쓰이는 내부 지표다.**
+
+- **Guest는 금액을 보지 않는다.** 신청 폼, 접수 확인 메시지, 배차 안내 메시지 어디에도 금액이 없다. 계산 결과를 클라이언트로 내려보내지도 않는다.
+- Host 운영 화면과 대표기사 배차 요청 메시지에는 **세금포함 총액**을 표시한다.
 - server fare snapshot이 권위값이다.
-- fare rule이 없으면 0원으로 진행하지 않고 error다.
+- **요금표에 없는 노선 조합은 계산하지 않고 신청을 거부한다.** 0원으로 진행하지 않는다.
+- 인원이 1~7을 벗어나면 상위 구간을 조용히 적용하지 않고 거부한다.
 - 과거 snapshot은 rule 변경으로 재계산하지 않는다.
-- **근거가 확정되지 않은 VAT 10%를 V1 Guest 금액에 자동 추가하지 않는다.**
+- 편도 요금은 방향에 무관하게 같다. **인천공항 노선만 방향별로 다르다.** 규칙은 방향까지 명시해 저장하고 코드에 암묵 규칙을 두지 않는다.
 
-세무용 tax breakdown은 Post-V1 정산 정책에서 별도로 정의한다.
+### 지불
 
-### Payment instruction
+**지불은 이 서비스 바깥에서 이뤄진다.** StayOps는 금액을 정산하지 않고 수금·입금을 관리하지 않는다.
+
+V1이 기록하는 것은 하나뿐이다.
 
 ```text
-payment_type = pending | host | guest | split
-payment_instruction_status = pending | confirmed
-guest_due_krw
-host_due_krw
+payment_confirmed            boolean
+payment_confirmed_by
+payment_confirmed_at
 ```
 
 불변조건:
 
-```text
-guest_due_krw + host_due_krw = total_fare_krw
-```
+> `payment_confirmed = false`이면 배차 요청을 발송하지 않는다.
 
-payment instruction이 confirmed가 아니면 dispatch를 시작하지 않는다.
+이전 문서의 `payment_type`, `payment_instruction_status`, `guest_due_krw`, `host_due_krw`, 입금상태 3단계는 V1에서 사용하지 않는다. 정산은 Post-V1 범위이며, 그때를 위해 **fare snapshot은 V1부터 보존한다.**
 
 ---
 
 ## 7. 정상 왕복 플로우
 
 ```text
-1. Guest Form 제출
-2. server validation + authoritative fare
-3. TransferRequest 저장 + request_id/revision 생성
-4. Guest WhatsApp 접수 확인
-5. Host가 dispatch 준비 확인 / Driver 선택
-6. DriverDispatch 생성
-7. Host가 Kakao Share로 기사 채팅방에 전송
-   또는 검증된 automatic adapter 사용
-8. Driver가 signed Driver Web에서 accept/reject + ETA/vehicle 입력
-9. StayOps transaction이 DriverAssignment 확정
-10. Guest WhatsApp에 assignment 자동 반환
-11. Host가 운행 완료 처리
+ 1. Guest Form 제출
+ 2. server validation + authoritative fare
+ 3. TransferRequest 저장 (request_id, revision = 1)
+ 4. Guest WhatsApp 접수 확인 발송
+ 5. Host WhatsApp 신규 요청 알림 발송
+ 6. Host가 지불을 확인하고 payment_confirmed 표시
+ 7. Host가 [배차 요청] 클릭
+ 8. DriverDispatch 생성 (request_revision 스냅샷, 응답 토큰 발급)
+ 9. 대표기사에게 WhatsApp 템플릿 발송 (URL 버튼)
+10. 발송 성공 -> DriverDispatch: pending -> awaiting_response
+11. 대표기사가 링크에서 가능/불가 + 기사 전화번호 + 차량번호 입력
+12. StayOps transaction이 DriverAssignment 확정
+13. Guest WhatsApp에 배차 안내 자동 발송
+14. Host WhatsApp에 배차 완료 알림 발송
+15. Host가 운행 완료 처리
 ```
 
-Kakao 자동 outbound는 V1 필수가 아니다. one-click Kakao Share가 V1 baseline fallback이다.
+6~7번이 Host의 유일한 조작이다. 상세는 `07_WhatsApp_배차_왕복_설계.md`.
 
 ---
 
 ## 8. WhatsApp 운영 모델
 
-V1 목표는 내부 WhatsApp Business 번호에서 다음을 같이 만족하는 것이다.
+### 8.1 단일 번호
 
-- StayOps outbound operational message
-- Guest inbound webhook
+Guest와 대표기사가 **같은 WABA 번호**와 대화한다. Host 알림은 같은 번호에서 Host 개인 번호로 발송한다.
+
+V1 목표는 내부 WhatsApp Business 번호 하나에서 다음을 같이 만족하는 것이다.
+
+- StayOps outbound operational message (Guest / 대표기사 / Host)
+- inbound webhook 수신
 - Host의 WhatsApp Business App 수동 대화
 - 가능한 경우 Host sent-message echo도 StayOps 이력에 반영
 
@@ -239,29 +286,56 @@ coexistence
 coexistence | api_only | manual_only
 ```
 
+번호를 Guest용/Partner용으로 분리하는 방안은 Post-V1에서 검토한다.
+
+### 8.2 역할 라우팅
+
+들어오는 메시지의 역할을 먼저 판정한다.
+
+```text
+inbound message (provider wa_id)
+  -> E.164 정규화
+  -> 역할 판정
+       활성 DispatchPartner 번호와 일치       -> role = partner
+       활성 TransferRequest 손님 번호와 일치  -> role = guest
+       둘 다 일치                             -> role = partner (+ 충돌 플래그)
+       어느 쪽도 아님                         -> role = unknown
+  -> MessageEvent 저장 (role, request_id nullable)
+```
+
+Guest inbound free-text는 하나의 활성 request에 명확히 연결되는 경우에만 `request_id`를 붙인다. 0건이거나 복수면 자동 추정하지 않고 Host 확인 대상으로 둔다.
+
+대표기사가 링크 대신 자유 텍스트로 답장하면 고정 문구로 링크를 1회 재안내한다. **응답 내용을 파싱하지 않는다.**
+
 V1에서 AI 자유대화 자동답변은 하지 않는다.
 
-Guest inbound free-text는 먼저 MessageEvent로 저장하고, 하나의 활성 request에 명확히 연결되는 경우에만 request_id를 붙인다. 여러 request가 후보면 자동 추정하지 않고 Host 확인 대상으로 둔다.
+### 8.3 24시간 창
+
+상대가 메시지를 보내야 24시간 자유 텍스트 창이 열린다. URL 버튼 탭은 메시지가 아니므로 창이 열리지 않는다.
+
+따라서 business-initiated 메시지는 승인된 템플릿이어야 한다. 창 상태를 `wa_contacts`로 추적하고 발송 직전 템플릿/자유 텍스트를 결정한다.
 
 ---
 
-## 9. Driver / Kakao 운영 모델
+## 9. 배차 운영 모델
 
-기사 자유 텍스트를 파싱하지 않는다.
+대표기사의 자유 텍스트를 파싱하지 않는다.
 
 ```text
 DriverDispatch
--> Kakao Share/notification
--> signed Driver Response Web
--> accept/reject
--> ETA
--> vehicle plate
--> vehicle model/color optional
+-> WhatsApp 템플릿 (요약 + URL 버튼)
+-> signed 배차 응답 Web
+-> 가능 / 불가
+-> 기사 전화번호 (국가번호 포함 E.164)
+-> 차량번호
+-> 차량 종류/색상 optional
 ```
 
-Driver 기본 name/phone은 Driver master에서 prefill할 수 있다.
+응답 토큰은 bearer credential이며 짧은 TTL, 폐기 가능, hashed-at-rest로 관리한다.
 
-Driver response token은 bearer credential이며 짧은 TTL, one-time/revocable, hashed-at-rest로 관리한다.
+`ETA`는 V1 필수 항목이 아니다. 픽업 시각은 항공편 착륙 시각 기준으로 이미 확정돼 있다.
+
+**배차 확정 후 차량·기사가 바뀌는 경우는 V1에서 시스템으로 처리하지 않는다.** 이례적 상황이므로 Host가 수동 대응한다.
 
 ---
 
@@ -297,7 +371,9 @@ pending
 -> accepted | rejected | expired | cancelled
 ```
 
-전송 성공/실패는 Notification이 담당한다.
+`pending -> awaiting_response`의 트리거는 **Notification 발송 성공(sent)**이다. `notification_channel = manual`인 경우에만 Host의 전달 완료 확인으로 전환한다.
+
+전송 성공/실패 자체는 Notification이 담당한다.
 
 ### 10.3 DriverAssignment
 
@@ -341,7 +417,7 @@ material edit:
 - flight
 - passenger/luggage
 - child seat/terminal transfer
-- payment instruction
+- 지불 확인 취소
 
 assignment 이후 material edit은 기존 assignment를 `superseded`로 만들고 request를 `needs_reconfirmation`으로 보낸다. stale dispatch/token으로 새 assignment를 만들 수 없다.
 
@@ -356,6 +432,7 @@ host_id
 brand_name
 settings
 whatsapp_connection_mode
+host_notify_phone_e164        운영 알림 수신용 개인 번호
 ```
 
 ### Stay
@@ -394,7 +471,8 @@ time_semantics
 flight_no
 passenger_count
 large_luggage_count
-port_code
+origin_code
+destination_code
 terminal_code
 child_seat_count
 child_seat_notes
@@ -402,23 +480,36 @@ terminal_transfer
 special_request
 
 fare_snapshot
-payment_type
-payment_instruction_status
-guest_due_krw
-host_due_krw
+  base_fare_krw
+  option_fare_krw
+  supply_amount_krw
+  tax_amount_krw
+  total_amount_krw
+  fare_rule_version
+  calculated_at
+
+payment_confirmed
+payment_confirmed_by
+payment_confirmed_at
+
 transfer_status
 created_at
 updated_at
 ```
 
-### Driver
+### DispatchPartner
 
 ```text
-driver_id
+partner_id
 host_id
 name
-phone
-notification_route
+contact_name
+whatsapp_phone_e164
+whatsapp_opt_in
+whatsapp_opt_in_at
+whatsapp_opt_in_policy_version
+preferred_language
+notification_channel          whatsapp | sms | manual
 is_active
 ```
 
@@ -428,7 +519,7 @@ is_active
 dispatch_id
 request_id
 request_revision
-driver_id
+partner_id
 status
 expires_at
 response_token_hash
@@ -441,15 +532,17 @@ responded_at
 assignment_id
 request_id
 dispatch_id
-driver_id
+partner_id
 status
-eta
+driver_phone_e164
 vehicle_plate
 vehicle_model
 vehicle_color
 assigned_at
 completed_at
 ```
+
+개별 기사는 마스터가 아니라 **이 레코드의 값**으로만 존재한다.
 
 ### Notification / MessageEvent
 
@@ -459,8 +552,12 @@ request_id nullable
 request_revision nullable
 host_id
 contact_key / provider wa_id
-audience
-channel
+audience                      guest | partner | host
+role                          guest | partner | host | unknown
+channel                       whatsapp | sms | manual
+send_mode                     template | freeform
+template_name nullable
+template_language nullable
 provider_message_id/provider_event_id
 direction
 message_type
@@ -474,9 +571,20 @@ delivered_at
 last_error
 ```
 
+### wa_contacts
+
+```text
+phone_e164 / wa_id
+host_id
+role                          guest | partner | unknown
+linked_partner_id nullable
+last_inbound_at
+window_expires_at
+```
+
 ### FareRule
 
-route/area/direction/passenger tier와 option price의 server-owned policy. request 생성 시 snapshot을 보존한다.
+`08_요금표.md` §6의 형태를 따른다. request 생성 시 snapshot을 보존한다.
 
 ---
 
@@ -491,11 +599,13 @@ unique(host_id, idempotency_key)
 - same key + same payload -> original result
 - same key + different payload -> conflict
 
-### Driver accept
+### 배차 응답
 
-한 transaction에서 token/expiry/revision/request status/active assignment를 잠그고 검사한 뒤 assignment + status + Guest Notification outbox를 함께 만든다.
+한 transaction에서 token/expiry/revision/request status/active assignment를 잠그고 검사한 뒤 assignment + status + Guest Notification outbox + Host Notification outbox를 함께 만든다.
 
-두 기사가 동시에 수락해도 active assignment는 하나만 성공한다.
+응답 endpoint는 멱등이다. 같은 응답을 반복하면 최초 결과를 반환한다.
+
+대표기사가 한 명이므로 복수 수락 경쟁은 발생하지 않지만, 중복 제출과 Host edit 동시 발생을 막기 위해 트랜잭션 보호는 유지한다.
 
 ### Webhook
 
@@ -509,14 +619,15 @@ unique(host_id, idempotency_key)
 ## 14. 보안 경계
 
 - Guest browser는 DB table에 직접 write하지 않는다. public Edge Function을 통한다.
-- Host Admin은 Supabase Auth + RLS를 사용한다.
+- 배차 응답 Web도 마찬가지로 Edge Function을 통한다.
+- Host 운영 화면은 Supabase Auth + RLS를 사용한다.
 - privileged function은 client가 보낸 host_id를 신뢰하지 않고 authenticated Host ownership을 확인한다.
 - secret/service key/provider token은 browser bundle에 넣지 않는다.
 - public request id만으로 PII를 조회할 수 없다.
-- Guest endpoint는 validation/body limit/rate limit을 적용한다.
+- Guest/배차응답 endpoint는 validation/body limit/rate limit을 적용한다.
 - webhook signature/verification을 provider 지원 방식에 맞춰 검증한다.
 
-Driver link 권장 형태:
+배차 응답 링크 형태:
 
 ```text
 https://<frontend>/driver#t=<opaque-random-token>
@@ -545,21 +656,21 @@ Notification은 durable outbox 역할을 하며 retry/dedupe/stale-skip을 지�
 
 ## 16. Failure / fallback
 
-### WhatsApp fail
+### WhatsApp 발송 실패
 
 ```text
 Notification failed
--> Needs Attention
+-> Host 확인 필요 목록
 -> retry
--> 필요 시 Host manual WhatsApp
+-> 필요 시 Host manual 전달
 ```
 
-### Driver reject / timeout
+### 대표기사 배차 불가 / 무응답
 
 ```text
 Dispatch rejected/expired
--> Host selects next Driver
--> new Dispatch
+-> Host에게 알림
+-> Host가 다른 경로 수배 (V1에서 자동화하지 않음)
 ```
 
 ### Schedule/material change
@@ -573,24 +684,28 @@ revision +1
 
 ### Cancel
 
-cancelled request는 새 assignment를 받을 수 없다. queued stale notification은 발송하지 않는다.
+cancelled request는 새 assignment를 받을 수 없다. 대표기사에게 취소 통보를 발송하고, queued stale notification은 발송하지 않는다.
 
-### Kakao automatic outbound unavailable
+### 전송 수단 불가
 
-V1은 Kakao Share one-click을 사용한다. Host가 메시지를 직접 재작성하지 않는다.
+`PartnerNotificationAdapter`를 `sms` 또는 `manual`로 전환한다. 세 경로 모두 같은 signed URL을 보내므로 도메인은 바뀌지 않는다. fallback은 운영자 클릭 1회를 요구할 수 있으나 **canonical 데이터 재입력을 요구해서는 안 된다.**
 
 ---
 
 ## 17. V1에서 하지 않는 것
 
+- KakaoTalk 연동 전부
 - AI Guest 자유대화 자동응답
 - StayOps 자체 full WhatsApp inbox
 - 자동 flight tracking
 - 복잡한 live GPS tracking
-- 다중 기사 fan-out marketplace
-- 정산 자동화/Excel 대체
+- 개별 기사 마스터/계정, 다중 기사 fan-out
+- 배차 확정 후 차량·기사 변경 흐름
+- 정산 자동화/Excel 대체, 입금상태 관리
+- Guest에게 금액 노출
 - self-service multi-host onboarding/billing
 - iCal/청소/세탁
+- 당일 투어 상품 (`08_요금표.md` §6.3)
 
 ---
 
@@ -600,13 +715,16 @@ V1은 Kakao Share one-click을 사용한다. Host가 메시지를 직접 재작�
 
 1. 실제 WhatsApp Business 번호 inbound/outbound
 2. Host manual reply와 Coexistence 또는 동등 경로
-3. 필요한 WhatsApp template
-4. opt-in/privacy notice
-5. production backup/secret
-6. 실제 fare table 청구금액
-7. Driver seed/연락처
-8. Kakao Share real-device E2E
-9. WSR는 주소 확정 전 inactive 유지
+3. Guest 템플릿 승인 (접수 확인 / 배차 완료 / 일정 변경)
+4. 대표기사 템플릿 승인 및 실단말 수신
+5. 대표기사 단말에서 URL 버튼 -> signed 응답 Web 정상 오픈
+6. 대표기사 연락처 확보와 WhatsApp 사용 가능 여부 확인
+7. 대표기사 opt-in 증거 확보
+8. opt-in/privacy notice
+9. production backup/secret
+10. `08_요금표.md` 미확정 항목 확정
+11. Guest/Partner inbound 역할 라우팅 검증
+12. WSR는 주소 확정 전 inactive 유지
 
 ---
 
